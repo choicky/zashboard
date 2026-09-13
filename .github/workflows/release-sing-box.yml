@@ -1,0 +1,56 @@
+name: Release sing-box build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+      - uses: pnpm/action-setup@v6
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          while IFS=: read -r font archive; do
+            FONT="$font" pnpm build
+            (cd dist && zip -qr "../release-assets/$archive" .)
+          done <<'EOF'
+          all:dist.zip
+          none:dist-no-fonts.zip
+          cdn:dist-cdn-fonts.zip
+          firasans:dist-firasans-only.zip
+          misans:dist-misans-only.zip
+          pingfang:dist-pingfang-only.zip
+          sarasa:dist-sarasa-only.zip
+          EOF
+          sha256sum release-assets/*.zip > release-assets/SHA256SUMS
+
+      - name: Publish v3.26.1
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v3.26.1
+          name: v3.26.1 — sing-box 1.14 support restored
+          target_commitish: main
+          make_latest: true
+          generate_release_notes: true
+          body: |
+            First release of the choicky/zashboard maintenance fork.
+
+            - Restores sing-box Clash API compatibility.
+            - Restores the native sing-box gRPC-Web backend.
+            - Synchronizes the native API schema with sing-box v1.14.0.
+            - Retains the zashboard v3.26.0 UI and performance improvements.
+          files: |
+            release-assets/*.zip
+            release-assets/SHA256SUMS
