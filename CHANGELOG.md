@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased (choicky fork)
+
+### Features
+
+* restore sing-box Clash API and native gRPC API support on the zashboard 3.26.0 codebase
+* synchronize the native daemon API schema with sing-box v1.14.0
+
+### Maintenance
+
+* point update checks, releases, issue links, and container publishing to `choicky/zashboard`
+
 # Changelog
 
 ## [3.26.0](https://github.com/Zephyruso/zashboard/compare/v3.25.0...v3.26.0) (2026-09-07)

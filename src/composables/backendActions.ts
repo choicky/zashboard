@@ -189,24 +189,28 @@ export const backendActions = computed<BackendAction[]>(() => {
     })
   }
 
-  actions.push({
-    key: k.flushDNSCache,
-    label: 'flushDNSCache',
-    icon: TrashIcon,
-    running: isDNSCacheFlushing.value,
-    opensModal: false,
-    run: () =>
-      runOnce('flushDNSCache', isDNSCacheFlushing, flushDNSCacheAPI, 'flushDNSCacheSuccess'),
-  })
+  if (can('dnsFlush')) {
+    actions.push({
+      key: k.flushDNSCache,
+      label: 'flushDNSCache',
+      icon: TrashIcon,
+      running: isDNSCacheFlushing.value,
+      opensModal: false,
+      run: () =>
+        runOnce('flushDNSCache', isDNSCacheFlushing, flushDNSCacheAPI, 'flushDNSCacheSuccess'),
+    })
+  }
 
-  actions.push({
-    key: k.flushFakeIP,
-    label: 'flushFakeIP',
-    icon: TrashIcon,
-    running: isFakeIPFlushing.value,
-    opensModal: false,
-    run: () => runOnce('flushFakeIP', isFakeIPFlushing, flushFakeIPAPI, 'flushFakeIPSuccess'),
-  })
+  if (can('fakeIPFlush')) {
+    actions.push({
+      key: k.flushFakeIP,
+      label: 'flushFakeIP',
+      icon: TrashIcon,
+      running: isFakeIPFlushing.value,
+      opensModal: false,
+      run: () => runOnce('flushFakeIP', isFakeIPFlushing, flushFakeIPAPI, 'flushFakeIPSuccess'),
+    })
+  }
 
   if (hasSmartGroup.value) {
     actions.push({

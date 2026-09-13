@@ -309,3 +309,6 @@ export const fetchHonkStatsAPI = () => axios.get<HonkStats>('/stats')
 export const toggleRuleDisabledRefindAPI = (uuid: string) => {
   return axios.put(`/rules/${encodeURIComponent(uuid)}`)
 }
+
+// sing-box Clash API 与 reFind 使用同一稳定 UUID 规则端点。
+export const toggleRuleDisabledSingBoxAPI = toggleRuleDisabledRefindAPI

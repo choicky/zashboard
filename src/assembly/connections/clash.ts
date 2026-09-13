@@ -139,6 +139,9 @@ export const connectionAccessor: ConnectionAccessor = {
   },
   sniffHost: (connection) => asClash(connection).metadata.sniffHost,
   remoteAddress: (connection) => asClash(connection).metadata.remoteDestination,
+  protocol: () => '',
+  outboundType: () => '',
+  fromOutbound: () => '',
   isDirect: (connection) => getFinalProxyType(asClash(connection)) === PROXY_TYPE.Direct,
   smartBlock: (connection) => asClash(connection).metadata.smartBlock,
 }

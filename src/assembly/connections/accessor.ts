@@ -48,6 +48,9 @@ export interface ConnectionAccessor {
   inboundUser(connection: Connection): string
   sniffHost(connection: Connection): string
   remoteAddress(connection: Connection): string
+  protocol(connection: Connection): string
+  outboundType(connection: Connection): string
+  fromOutbound(connection: Connection): string
   isDirect(connection: Connection): boolean
   // smart 内核的降级标记;非 smart 时为 undefined。
   smartBlock(connection: Connection): string | undefined
@@ -130,6 +133,12 @@ export const createGetConnectionDisplayValue =
         return accessor.remoteAddress(connection) || '-'
       case CONNECTIONS_TABLE_ACCESSOR_KEY.InboundUser:
         return accessor.inboundUser(connection)
+      case CONNECTIONS_TABLE_ACCESSOR_KEY.Protocol:
+        return accessor.protocol(connection) || '-'
+      case CONNECTIONS_TABLE_ACCESSOR_KEY.OutboundType:
+        return accessor.outboundType(connection) || '-'
+      case CONNECTIONS_TABLE_ACCESSOR_KEY.FromOutbound:
+        return accessor.fromOutbound(connection) || '-'
       case CONNECTIONS_TABLE_ACCESSOR_KEY.Close:
         return ''
     }
