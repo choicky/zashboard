@@ -21,7 +21,10 @@ const browser = await connectBrowser(debuggingPort)
 try {
   const page = await browser.newPage()
   await page.goto(app.url)
-  assert.notEqual(await waitFor(() => page.evaluate('location.origin') === app.url), null)
+  assert.notEqual(
+    await waitFor(async () => (await page.evaluate('location.origin')) === app.url),
+    null,
+  )
   await page.evaluate(`
     localStorage.setItem('setup/api-list', ${JSON.stringify(
       JSON.stringify([

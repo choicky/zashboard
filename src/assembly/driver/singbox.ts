@@ -1,6 +1,11 @@
 import { getSingboxClient, probeSingboxChannel, validateSingboxVersion } from '@/api/singbox/client'
 import { subscribeStream } from '@/api/singbox/subscriptions'
-import { proxyGroupList, proxyMap, proxyProviederList } from '@/assembly/proxies/state'
+import {
+  isLatencyTestable,
+  proxyGroupList,
+  proxyMap,
+  proxyProviederList,
+} from '@/assembly/proxies/state'
 import { LOG_LEVEL } from '@/constant'
 import {
   ConnectionEventType,
@@ -251,7 +256,7 @@ const resolveLatencyTargets = (name: string, seen = new Set<string>()): string[]
   if (seen.has(name)) return []
   seen.add(name)
   const proxy = proxyMap.value[name]
-  if (!proxy?.all?.length) return [name]
+  if (!proxy?.all?.length) return isLatencyTestable(name) ? [name] : []
   return proxy.all.flatMap((child) => resolveLatencyTargets(child, seen))
 }
 
