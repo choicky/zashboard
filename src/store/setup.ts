@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid'
 import { computed, ref } from 'vue'
 import { sourceIPLabelList } from './settings'
 import { migrateBackendList } from './backend-migration'
-import { canActivateBackend } from './backend-activation'
+import { canActivateBackend, nextActivatableBackend } from './backend-activation'
 import { showNotification } from '@/helper/notification'
 
 type LegacyBackend = Omit<Partial<Backend>, 'type'> & {
@@ -77,15 +77,7 @@ export const closeBackendManager = () => {
 }
 
 export const switchActiveBackend = (direction: 1 | -1) => {
-  if (backendList.value.length < 2) {
-    return null
-  }
-
-  const currentIndex = backendList.value.findIndex((backend) => backend.uuid === activeUuid.value)
-  const startIndex = currentIndex >= 0 ? currentIndex : 0
-  const nextIndex = (startIndex + direction + backendList.value.length) % backendList.value.length
-
-  const nextBackend = backendList.value[nextIndex]
+  const nextBackend = nextActivatableBackend(backendList.value, activeUuid.value, direction)
 
   if (!nextBackend) {
     return null

@@ -23,6 +23,7 @@ let backendGeneration = 0
 
 watch(activeBackend, () => {
   backendGeneration++
+  void checkUIUpdate()
 })
 
 export type BackendProbe = {
@@ -114,6 +115,10 @@ const probeBackendVersion = async (backend: Backend) => {
     latency: Date.now() - startAt,
     message: '',
   }
+
+  // HomePage may have checked before /version completed. Re-run now that the
+  // core identity and capability table are authoritative for this backend.
+  void checkUIUpdate()
 
   if (!can('coreUpdateCheck') || !checkUpgradeCore.value || backend.disableUpgradeCore) return
 
