@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { runStream } from '../src/api/singbox/streams.ts'
 import { channelSpecificCapabilities } from '../src/assembly/channel-capabilities.ts'
-import { coordinateNativeTest, isFreshNativeLatency } from '../src/assembly/native-latency.ts'
+import {
+  coordinateNativeTest,
+  freshNativeLatencyResults,
+  isFreshNativeLatency,
+} from '../src/assembly/native-latency.ts'
 import { createSessionGate } from '../src/assembly/session-gate.ts'
 
 const gate = createSessionGate()
@@ -44,6 +48,20 @@ assert.equal(
   false,
 )
 assert.equal(isFreshNativeLatency(0, '2026-11-01T00:00:01.000Z', 0), false)
+assert.deepEqual(
+  freshNativeLatencyResults(
+    ['reachable', 'unreachable'],
+    {
+      reachable: { delay: 120, time: '2026-11-01T00:00:01.000Z' },
+      unreachable: { delay: 300, time: '2026-10-31T23:59:59.000Z' },
+    },
+    new Map([
+      ['reachable', Date.parse('2026-11-01T00:00:00.000Z')],
+      ['unreachable', Date.parse('2026-11-01T00:00:00.000Z')],
+    ]),
+  ),
+  { reachable: 120 },
+)
 
 let rejectedAbort = 0
 const rejectedWaiter = Promise.reject(new Error('waiter failed'))

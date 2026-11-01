@@ -169,6 +169,7 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
   }
 
   const timeout = Math.max(5000, speedtestTimeout.value)
+  const nativeTest = activeBackend.value?.type === 'singbox'
 
   if (IPv6test.value && activeBackend.value?.type !== 'singbox') {
     try {
@@ -187,8 +188,9 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
       })
     }
   }
+  let latencyResult: Record<string, number> | undefined
   try {
-    await driver().proxies.testGroup(proxyGroupName, url, timeout)
+    latencyResult = await driver().proxies.testGroup(proxyGroupName, url, timeout)
   } catch (e) {
     notifyRequestError(e)
     return
@@ -196,10 +198,11 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
     await fetchProxies()
   }
 
-  const total = all.length
-  const testFailed = all.filter(
-    (name) => getLatencyByName(name, proxyGroupName) === NOT_CONNECTED,
-  ).length
+  const total = nativeTest && latencyResult ? Object.keys(latencyResult).length : all.length
+  const testFailed =
+    nativeTest && latencyResult
+      ? Object.values(latencyResult).filter((delay) => delay <= NOT_CONNECTED).length
+      : all.filter((name) => getLatencyByName(name, proxyGroupName) === NOT_CONNECTED).length
 
   showNotification({
     content: 'testFinishedResultTip',

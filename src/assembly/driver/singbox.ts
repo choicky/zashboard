@@ -21,7 +21,7 @@ import { iconReflectList } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Backend, Config, Connection, Log, Proxy } from '@/types'
 import { shallowRef, watch } from 'vue'
-import { coordinateNativeTest, isFreshNativeLatency } from '../native-latency'
+import { coordinateNativeTest, freshNativeLatencyResults } from '../native-latency'
 import type {
   ConnectionAccessor,
   ConnectionsPayload,
@@ -205,7 +205,19 @@ const waitForNativeLatency = (names: string[], timeout: number, backend: Backend
     }
     finish = complete
     const timer = setTimeout(
-      () => complete(new Error('sing-box URLTest result timeout')),
+      () => {
+        const fresh = freshNativeLatencyResults(
+          names,
+          Object.fromEntries(
+            names.map((name) => {
+              const sample = proxyMap.value[name]?.history.at(-1)
+              return [name, sample]
+            }),
+          ),
+          initialTimes,
+        )
+        complete(undefined, Object.fromEntries(names.map((name) => [name, fresh[name] ?? 0])))
+      },
       Math.max(1000, timeout) + 1000,
     )
     stop = watch(
@@ -215,19 +227,15 @@ const waitForNativeLatency = (names: string[], timeout: number, backend: Backend
           complete(new Error('sing-box URLTest session changed'))
           return
         }
-        const result = Object.fromEntries(
-          names
-            .map((name) => {
+        const result = freshNativeLatencyResults(
+          names,
+          Object.fromEntries(
+            names.map((name) => {
               const sample = proxyMap.value[name]?.history.at(-1)
-              return [
-                name,
-                sample &&
-                isFreshNativeLatency(sample.delay, sample.time, initialTimes.get(name) ?? 0)
-                  ? sample.delay
-                  : 0,
-              ] as const
-            })
-            .filter(([, delay]) => delay > 0),
+              return [name, sample]
+            }),
+          ),
+          initialTimes,
         )
         if (Object.keys(result).length === names.length) {
           complete(undefined, result)
