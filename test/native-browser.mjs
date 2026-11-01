@@ -191,7 +191,11 @@ try {
     true,
   )
   await open('proxies')
-  assert.match(await page.evaluate('document.body.innerText'), /Group-|Node-/i)
+  assert.equal(
+    await page.evaluate(`document.querySelector('[data-group-name]') !== null`),
+    true,
+    'Clash proxy groups were not rendered after backend switching',
+  )
   assert.equal(
     await page.evaluate('performance.timeOrigin'),
     pageTimeOrigin,
