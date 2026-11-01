@@ -84,7 +84,8 @@ try {
     [...document.querySelectorAll('body *')].some((el) => /sing-box|1\\.14\\./i.test(el.innerText || '')) ||
     [...document.querySelectorAll('[data-core-brand]')].some((el) =>
       /SagerNet\\/sing-box/i.test(el.dataset.coreBrand || '') && /1\\.14\\./i.test(el.dataset.coreVersion || '')
-    )
+    ) ||
+    [...document.querySelectorAll('button')].some((el) => /native-sing-box/i.test(el.textContent || ''))
   `)
   assert.equal(
     nativeIdentity,
