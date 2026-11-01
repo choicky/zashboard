@@ -71,7 +71,7 @@ try {
     assert.notEqual(
       ready,
       null,
-      `native ${route} page did not load: ${await page.evaluate('document.body.innerText.slice(0, 1000)')}`,
+      `native ${route} page did not load: ${await page.evaluate("document.body?.innerText?.slice(0, 1000) || document.documentElement?.outerHTML?.slice(0, 1000) || '<empty document>'")}`,
     )
     const text = await page.evaluate('document.body.innerText')
     assert.doesNotMatch(text, /Cannot read properties|Unhandled|网络错误/i)
