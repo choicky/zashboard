@@ -87,9 +87,10 @@ Release ZIP 并解压；手动更新时下载并校验 `SHA256SUMS`，准备新�
 sing-box API，并与 mock-backed `test:verify` 分开。PR 校验在 `validate-sync` 的
 `native-browser` job 中以 PR merge ref 构建并运行官方 amd64 二进制；Chrome 调试
 端点不可用是失败或未执行，不是通过。下载失败回滚、PWA cache 更新、Android/Windows
-实机和 native dashboard 自动升级仍未作为已验证能力声明。官方 v1.14.4
-隔离验收配置返回空 mode 列表，因此该环境的 mode UI 被隐藏；原生 mode
-切换未宣称为已完成浏览器验收。
+实机和 native dashboard 自动升级仍未作为已验证能力声明。仅配置 native
+service 时，官方 v1.14.4 可能返回空 mode 列表，面板会隐藏无选项的操作；本
+PR 的隔离验收配置同时启用了官方 Clash API mode 服务，已在真实核心浏览器
+验收中选择并切换了返回的 mode。用户配置若返回空列表仍不会显示必然失败的控件。
 
 兼容性检查支持 `workflow_dispatch` 和计划运行：读取官方 stable release、下载
 分发二进制、运行 type-check/build/native smoke，并以 testing 版本做非阻塞预警；
