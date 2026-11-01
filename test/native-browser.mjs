@@ -126,7 +126,11 @@ try {
     option?.click()
     return Boolean(option)
   })()`)
-  assert.equal(modeControl, true, 'native mode control was not found')
+  assert.equal(
+    modeControl,
+    true,
+    `native mode control was not found: active=${await page.evaluate("document.querySelector('[data-active-backend-type]')?.dataset.activeBackendType || '<none>'")}, controls=${await page.evaluate("document.querySelectorAll('[data-native-mode-control]').length")}`,
+  )
 
   const logs = await open('logs')
   assert.doesNotMatch(logs, /dashboard upgrade|更新面板/i)
