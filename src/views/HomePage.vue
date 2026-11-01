@@ -2,6 +2,7 @@
   <div
     class="home-page bg-base-200 flex size-full"
     :class="sidebarLayoutCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'"
+    :data-active-backend-type="activeBackend?.type"
   >
     <div
       v-if="!isMiddleScreen"

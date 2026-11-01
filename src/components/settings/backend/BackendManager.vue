@@ -55,7 +55,7 @@
                   v-if="element.type === 'singbox'"
                   class="text-warning w-full truncate text-xs"
                 >
-                  {{ $t('singboxNativePending') }}
+                  sing-box native
                 </span>
               </span>
               <span

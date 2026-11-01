@@ -4,17 +4,22 @@ import { can } from './backend'
 import { fetchConfigs } from './config'
 import { initConnections, stopConnections } from './connections'
 import { fetchDaeRuntime } from './dae'
+import type { Driver } from './driver'
 import { driver } from './driver'
 import { initLogs, stopLogs } from './logs'
 import { initSatistic, stopSatistic } from './overview'
 import { fetchProxies } from './proxies'
 import { fetchRules } from './rules'
+import { runSessionAfterProbe } from './session-boundary'
+import { createSessionGate } from './session-gate'
 import { probeActiveBackend } from './version'
 
 const EVENT_DEBOUNCE = 400
 
 let events: { close: () => void } | undefined
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
+let sessionDriver: Driver | undefined
+const sessionGate = createSessionGate()
 
 const scheduleRefresh = () => {
   clearTimeout(refreshTimer)
@@ -45,36 +50,40 @@ const initEvents = () => {
 }
 
 export const startBackendSession = async () => {
-  if (activeBackend.value?.type === 'singbox') {
-    // The activation guard normally prevents this state. Keep the session
-    // boundary fail-closed if a stale store or an external caller gets here.
-    return
-  }
+  const generation = sessionGate.begin()
+  const selectedBackend = activeBackend.value
+  const nextDriver = driver()
+  sessionDriver?.reset?.()
+  sessionDriver = activeBackend.value ? nextDriver : undefined
 
   stopConnections()
   stopLogs()
   stopSatistic()
   stopEvents()
-  driver().reset?.()
+  nextDriver.reset?.()
 
-  if (!activeBackend.value) {
+  if (!selectedBackend) {
     probeActiveBackend()
     return
   }
 
-  await probeActiveBackend().catch(() => {})
+  await runSessionAfterProbe(probeActiveBackend, async () => {
+    if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
+      return
 
-  fetchConfigs()
-  fetchProxies()
-  fetchRules()
-  initConnections()
-  initLogs()
-  initSatistic()
-  initEvents()
+    fetchConfigs().catch(() => {})
+    fetchProxies().catch(() => {})
+    fetchRules().catch(() => {})
 
-  if (activeBackend.value.type === 'dae') {
-    fetchDaeRuntime().catch(() => {})
-  }
+    initConnections()
+    initLogs()
+    initSatistic()
+    initEvents()
+
+    if (activeBackend.value.type === 'dae') {
+      fetchDaeRuntime().catch(() => {})
+    }
+  })
 }
 
 watch(activeBackend, startBackendSession, { immediate: true })

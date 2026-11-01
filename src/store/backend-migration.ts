@@ -26,7 +26,8 @@ const isBackendType = (type: string | undefined): type is MigratedBackend['type'
   type === 'clash' || type === 'dae' || type === 'singbox'
 
 const withoutChannel = (record: BackendRecord): Omit<BackendRecord, 'singboxChannel'> => {
-  const { singboxChannel: _channel, ...base } = record
+  const base = { ...record }
+  delete base.singboxChannel
   return base
 }
 
@@ -57,7 +58,7 @@ export const migrateBackendList = (
         secondaryPath: '',
         password: channel.secret || '',
         uuid: createUuid(),
-        label: base.label ? `${base.label} (sing-box native, pending)` : 'sing-box native (pending)',
+        label: base.label ? `${base.label} (sing-box native)` : 'sing-box native',
       })
     }
   }

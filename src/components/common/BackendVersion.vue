@@ -1,5 +1,9 @@
 <template>
-  <div class="flex items-center gap-1 overflow-hidden">
+  <div
+    class="flex items-center gap-1 overflow-hidden"
+    :data-core-brand="coreBrand.url"
+    :data-core-version="version"
+  >
     <img
       :src="coreBrand.logo"
       class="h-4 w-4 rounded-xs"

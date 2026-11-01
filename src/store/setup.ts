@@ -1,16 +1,16 @@
 import { useStorage } from '@/composables/use-storage'
+import { showNotification } from '@/helper/notification'
 import type { Backend } from '@/types'
 import { isEqual, omit } from 'lodash'
 import { v4 as uuid } from 'uuid'
 import { computed, ref } from 'vue'
-import { sourceIPLabelList } from './settings'
-import { migrateBackendList } from './backend-migration'
 import {
   canActivateBackend,
   firstActivatableBackend,
   nextActivatableBackend,
 } from './backend-activation'
-import { showNotification } from '@/helper/notification'
+import { migrateBackendList } from './backend-migration'
+import { sourceIPLabelList } from './settings'
 
 type LegacyBackend = Omit<Partial<Backend>, 'type'> & {
   type?: string
@@ -32,16 +32,6 @@ if ((backendList.value as LegacyBackend[]).some(isLegacyBackend)) {
 }
 
 export const activeUuid = useStorage<string>('setup/active-uuid', '')
-
-// Do not reopen a preserved native entry as if it were a usable Clash session.
-// Leaving it unselected keeps the connection details available in the manager
-// while directing the user to an explicitly supported backend.
-if (
-  activeUuid.value &&
-  backendList.value.find((item) => item.uuid === activeUuid.value)?.type === 'singbox'
-) {
-  activeUuid.value = ''
-}
 
 if (activeUuid.value && !backendList.value.some((item) => item.uuid === activeUuid.value)) {
   activeUuid.value = ''

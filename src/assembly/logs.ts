@@ -68,6 +68,14 @@ export const initLogs = () => {
   )
 
   const subscription = driver().logs.subscribe(logLevel.value, (batch: Log[]) => {
+    if (!batch.length) {
+      flush.cancel()
+      pending = []
+      logs.value = []
+      seq = 1
+      return
+    }
+
     for (const data of batch) {
       if (isPaused.value) {
         seq++

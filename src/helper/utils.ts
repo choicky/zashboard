@@ -87,6 +87,11 @@ export const getUrlFromBackend = (end: {
   return `${end.protocol}://${end.host}:${end.port}${end.secondaryPath || ''}`
 }
 
+export const getSingboxUrlFromBackend = (backend: Backend) =>
+  getUrlFromBackend(backend).replace(/\/$/, '')
+
+export const getSingboxSecret = (backend: Backend) => backend.password || ''
+
 export const getBackendProbeUrl = (end: Omit<Backend, 'uuid'>) => getUrlFromBackend(end)
 
 export const getLabelFromBackend = (end: Omit<Backend, 'uuid'>) => {

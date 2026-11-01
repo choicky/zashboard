@@ -11,6 +11,7 @@ import type { Backend } from '@/types'
 import { computed, nextTick, ref, watch } from 'vue'
 import { can, core, Core, resetCore } from './backend'
 import { fetchCapabilities, resetCapabilities } from './capabilities'
+import { runOptionalCoreUpdateCheck } from './core-update'
 import { driver } from './driver'
 import { hasNewerStableRelease, type ForkRelease } from './release-version'
 
@@ -38,6 +39,7 @@ export type BackendProbe = {
 export const backendProbe = ref<BackendProbe | undefined>()
 
 const detectCore = (versionString: string): Core => {
+  if (activeBackend.value?.type === 'singbox') return Core.SingBox
   if (/\bsing-box\b/i.test(versionString)) return Core.SingBox
   if (/\bhonk\b/i.test(versionString)) return Core.Honk
   if (activeBackend.value?.type === 'dae') return Core.Dae
@@ -125,11 +127,22 @@ const probeBackendVersion = async (backend: Backend) => {
 
   if (!can('coreUpdateCheck') || !checkUpgradeCore.value || backend.disableUpgradeCore) return
 
-  isCoreUpdateAvailable.value = await fetchIsCoreUpdateAvailable()
-
-  if (isCoreUpdateAvailable.value && autoUpgradeCore.value) {
-    upgradeCore('auto').catch(() => {})
-  }
+  const updateGeneration = backendGeneration
+  const backendUuid = backend.uuid
+  const updateVersion = mihomo.value?.[1] ?? versionString
+  const updateChannel = MIHOMO_CHANNEL[mihomo.value?.[0] ?? MIHOMO.Meta]
+  runOptionalCoreUpdateCheck({
+    check: () => fetchIsCoreUpdateAvailable(updateChannel.check_update_url, updateVersion),
+    isCurrent: () =>
+      backendGeneration === updateGeneration && activeBackend.value?.uuid === backendUuid,
+    onResult: (available) => {
+      isCoreUpdateAvailable.value = available
+      if (available && autoUpgradeCore.value) upgradeCore('auto').catch(() => {})
+    },
+    onFailure: () => {
+      isCoreUpdateAvailable.value = false
+    },
+  })
 }
 
 let probe: Promise<void> = Promise.resolve()
@@ -150,23 +163,23 @@ export const probeActiveBackend = () => {
     ? { uuid: backend.uuid, status: 'probing', latency: 0, message: '' }
     : undefined
 
-  probe = backend ? probeBackendVersion(backend).catch(() => {}) : Promise.resolve()
+  probe = backend ? probeBackendVersion(backend) : Promise.resolve()
   return probe
 }
 
-const fetchIsCoreUpdateAvailable = async () => {
-  const versionNumber = mihomo.value?.[1] ?? version.value
-  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(
-    MIHOMO_CHANNEL[mihomo.value?.[0] ?? MIHOMO.Meta].check_update_url,
-    versionNumber,
-  )
+const fetchIsCoreUpdateAvailable = async (url: string, versionNumber: string) => {
+  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(url, versionNumber)
 
   return !assets.some(({ name }) => name.includes(versionNumber))
 }
 
 const checkUIUpdateForGeneration = async (checkGeneration: number) => {
   const backendUuid = activeBackend.value?.uuid
-  await coreReady()
+  try {
+    await coreReady()
+  } catch {
+    return
+  }
 
   // A check started for an old backend must never act on the newly selected
   // backend after probing or fetching GitHub releases completes.

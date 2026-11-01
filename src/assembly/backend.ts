@@ -2,6 +2,7 @@ import { displayAllFeatures } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import { computed, ref } from 'vue'
 import { daeCapabilities } from './capabilities'
+import { channelSpecificCapabilities } from './channel-capabilities'
 
 export enum Core {
   Mihomo = 'mihomo',
@@ -73,6 +74,7 @@ type Caps = Partial<Record<Cap, boolean>>
 const clashCaps = computed<Caps>(() => {
   const mihomo = core.value === Core.Mihomo
   const singBox = core.value === Core.SingBox
+  const channelCaps = channelSpecificCapabilities(activeBackend.value?.type)
   const honk = core.value === Core.Honk
   const mihomoOrForkCore = mihomo || isForkCoreOverride.value
 
@@ -98,12 +100,12 @@ const clashCaps = computed<Caps>(() => {
     proxyProviderUpdate: !singBox,
     proxyProviderHealthCheck: !singBox,
     ruleProviders: !singBox,
-    flushDNSCache: true,
-    flushFakeIP: true,
-    dnsQuery: true,
+    flushDNSCache: channelCaps.dns,
+    flushFakeIP: channelCaps.dns,
+    dnsQuery: channelCaps.dns,
     connectionsClose: true,
-    customTestUrl: true,
-    nodeLatencyTest: true,
+    customTestUrl: channelCaps.customTestUrl,
+    nodeLatencyTest: channelCaps.nodeLatencyTest,
   }
 })
 

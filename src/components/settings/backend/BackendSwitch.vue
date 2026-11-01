@@ -3,6 +3,7 @@
     <button
       v-if="compact"
       ref="triggerRef"
+      data-backend-switch-trigger="true"
       class="btn btn-circle btn-sm"
       :aria-label="$t('backend')"
       @click="toggle"
@@ -14,6 +15,7 @@
     <button
       v-else
       ref="triggerRef"
+      data-backend-switch-trigger="true"
       class="btn btn-sm w-full flex-nowrap justify-between font-normal"
       @click="toggle"
     >
@@ -54,6 +56,7 @@
             <button
               v-for="backend in backendList"
               :key="backend.uuid"
+              :data-backend-uuid="backend.uuid"
               class="flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors"
               :class="backend.uuid === activeUuid ? 'bg-primary/10' : 'hover:bg-base-200'"
               @click="switchTo(backend.uuid)"

@@ -8,15 +8,6 @@ export const probeBackend = (
   signal?: AbortSignal,
   authenticate = false,
 ): Promise<ProbeResult> => {
-  if (backend.type === 'singbox') {
-    return Promise.resolve({
-      ok: false,
-      latency: 0,
-      kind: 'unsupported',
-      message: 'sing-box native API support is pending',
-    })
-  }
-
   return driverFor(backend).system.probe(backend, timeout, signal, authenticate)
 }
 
