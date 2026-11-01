@@ -8,7 +8,8 @@ gRPC-Web 通道。两条通道按保存的 backend 类型选择；不会把 nati
 
 原生通道使用官方 `sing-box` 1.14.4 的 `daemon.StartedService` 协议，支持
 版本探测、代理组/节点选择、URLTest、traffic/memory、活动连接、按 ID 关闭
-连接、日志和 Clash mode。连接流会在 backend 切换时取消，旧流的事件会被丢弃；
+连接和日志；若原生服务返回非空 Clash mode 列表，面板也会显示并调用 mode
+切换。连接流会在 backend 切换时取消，旧流的事件会被丢弃；
 历史 closed 连接不会重新显示为活动连接。
 
 当前不支持或明确关闭：原生配置编辑/重载、核心升级/重启、面板自动升级、
@@ -86,7 +87,9 @@ Release ZIP 并解压；手动更新时下载并校验 `SHA256SUMS`，准备新�
 sing-box API，并与 mock-backed `test:verify` 分开。PR 校验在 `validate-sync` 的
 `native-browser` job 中以 PR merge ref 构建并运行官方 amd64 二进制；Chrome 调试
 端点不可用是失败或未执行，不是通过。下载失败回滚、PWA cache 更新、Android/Windows
-实机和 native dashboard 自动升级仍未作为已验证能力声明。
+实机和 native dashboard 自动升级仍未作为已验证能力声明。官方 v1.14.4
+隔离验收配置返回空 mode 列表，因此该环境的 mode UI 被隐藏；原生 mode
+切换未宣称为已完成浏览器验收。
 
 兼容性检查支持 `workflow_dispatch` 和计划运行：读取官方 stable release、下载
 分发二进制、运行 type-check/build/native smoke，并以 testing 版本做非阻塞预警；

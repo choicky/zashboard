@@ -168,6 +168,7 @@ export default defineComponent({
       // Native mode is a verified channel capability after the session probe;
       // keep the control available even while core branding is still settling.
       const modeSelect = configs.value &&
+        modeList.value.length > 0 &&
         (can('configPatch') || activeBackend.value?.type === 'singbox') && (
           <SelectInput
             data-native-mode-control="true"

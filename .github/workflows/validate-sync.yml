@@ -81,16 +81,4 @@ jobs:
             sleep 1
           done
           SINGBOX_SECRET=ci-native-secret SINGBOX_EXPECTED_VERSION=1.14.4 node test/singbox-native.mjs
-          set +e
           SINGBOX_SECRET=ci-native-secret SINGBOX_API_PORT=19092 SINGBOX_UI_PORT=19080 node test/native-browser.mjs
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo '--- sing-box core log ---'
-            cat "$RUNNER_TEMP/sing-box/core.log"
-            echo '--- native API reachability after browser failure ---'
-            curl -i -H 'Authorization: Bearer ci-native-secret' \
-              -H 'Content-Type: application/grpc-web+proto' -H 'x-grpc-web: 1' \
-              --data-binary $'\\x00\\x00\\x00\\x00\\x00' \
-              http://127.0.0.1:19092/daemon.StartedService/GetVersion || true
-          fi
-          exit "$status"
