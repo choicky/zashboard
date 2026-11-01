@@ -270,7 +270,7 @@ const resolveLatencyTargets = (name: string, seen = new Set<string>()): string[]
   seen.add(name)
   const proxy = proxyMap.value[name]
   if (!proxy?.all?.length) return isLatencyTestable(name) ? [name] : []
-  return proxy.all.flatMap((child) => resolveLatencyTargets(child, seen))
+  return proxy.all.flatMap((child) => resolveLatencyTargets(child, seen)).filter(isLatencyTestable)
 }
 
 const splitHostPort = (value: string): [string, string] => {
