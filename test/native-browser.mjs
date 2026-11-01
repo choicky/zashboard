@@ -158,6 +158,16 @@ try {
 
   // Switch to the Phase 1 Clash channel through the visible backend selector,
   // without a full-page reload. This also exercises native stream disposal.
+  await page.goto(`${app.url}/#/settings?section=backend`)
+  assert.notEqual(
+    await waitFor(
+      () => page.evaluate(`location.hash.includes('settings') && document.body != null`),
+      {
+        timeout: 10000,
+      },
+    ),
+    null,
+  )
   await page.evaluate(`(() => {
     const trigger = [...document.querySelectorAll('button')].find((el) =>
       /native-sing-box/.test(el.textContent || '')
@@ -178,18 +188,14 @@ try {
     if (!target) throw new Error('Clash backend option not found')
     target.click()
   })()`)
-  assert.notEqual(
-    await waitFor(
-      () =>
-        page.evaluate(
-          `localStorage.getItem('setup/active-uuid') === 'clash' && (document.body?.innerText || '').match(/Group-|Node-/i) !== null`,
-        ),
-      {
-        timeout: 30000,
-      },
-    ),
-    null,
+  assert.equal(
+    (await waitFor(() => page.evaluate(`localStorage.getItem('setup/active-uuid') === 'clash'`), {
+      timeout: 30000,
+    })) !== null,
+    true,
   )
+  await open('proxies')
+  assert.match(await page.evaluate('document.body.innerText'), /Group-|Node-/i)
   assert.equal(
     await page.evaluate('performance.timeOrigin'),
     pageTimeOrigin,
