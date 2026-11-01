@@ -253,12 +253,6 @@ const leaveSetupPage = () => {
 }
 
 const switchTo = (uuid: string) => {
-  const backend = backendList.value.find((item) => item.uuid === uuid)
-  if (backend?.type === 'singbox') {
-    showNotification({ content: t('singboxNativePending'), type: 'alert-warning' })
-    return
-  }
-
   setActiveBackend(uuid)
   closeBackendManager()
   leaveSetupPage()

@@ -8,16 +8,22 @@ import { getRequestErrorMessage } from '@/helper/request-error'
 import { autoUpgradeCore, autoUpgradeDashboard, checkUpgradeCore } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Backend } from '@/types'
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { can, core, Core, resetCore } from './backend'
 import { fetchCapabilities, resetCapabilities } from './capabilities'
 import { driver } from './driver'
+import { hasNewerStableRelease, type ForkRelease } from './release-version'
 
 export const version = ref()
 export const isCoreUpdateAvailable = ref(false)
 export const isUIUpdateAvailable = ref(false)
 export const zashboardVersion = ref(__APP_VERSION__)
 export const zashboardReleaseTag = ref(__BUILD_RELEASE_TAG__)
+let backendGeneration = 0
+
+watch(activeBackend, () => {
+  backendGeneration++
+})
 
 export type BackendProbe = {
   uuid: string
@@ -151,16 +157,31 @@ const fetchIsCoreUpdateAvailable = async () => {
 }
 
 export const checkUIUpdate = async () => {
+  const backendUuid = activeBackend.value?.uuid
+  const checkGeneration = backendGeneration
+  await coreReady()
+
+  // A check started for an old backend must never act on the newly selected
+  // backend after probing or fetching GitHub releases completes.
+  if (
+    !backendUuid ||
+    backendGeneration !== checkGeneration ||
+    activeBackend.value?.uuid !== backendUuid ||
+    core.value === Core.Unknown
+  ) {
+    isUIUpdateAvailable.value = false
+    return
+  }
+
   if (!can('dashboardUpgrade')) {
     isUIUpdateAvailable.value = false
     return
   }
 
-  type Release = { tag_name: string; prerelease: boolean; draft: boolean }
-  let releases: Release[]
+  let releases: ForkRelease[]
 
   try {
-    releases = await fetchWithLocalCache<Release[]>(
+    releases = await fetchWithLocalCache<ForkRelease[]>(
       'https://api.github.com/repos/choicky/zashboard/releases?per_page=30',
       zashboardReleaseTag.value,
     )
@@ -170,16 +191,14 @@ export const checkUIUpdate = async () => {
     return
   }
 
-  const latestStable = releases.find(
-    (release) =>
-      !release.draft && !release.prerelease && /^sb-v\d+\.\d+\.\d+$/.test(release.tag_name),
-  )
-
-  // Compare the complete fork tag. In particular, sb-v3.30.0-rc1 must not be
+  // Compare the complete fork tag. In particular, a prerelease must not be
   // compared to v3.30.0 or repeatedly trigger an automatic update.
-  isUIUpdateAvailable.value = Boolean(
-    latestStable && latestStable.tag_name !== zashboardReleaseTag.value,
-  )
+  isUIUpdateAvailable.value = hasNewerStableRelease(releases, zashboardReleaseTag.value)
+
+  if (backendGeneration !== checkGeneration || activeBackend.value?.uuid !== backendUuid) {
+    isUIUpdateAvailable.value = false
+    return
+  }
 
   if (isUIUpdateAvailable.value && autoUpgradeDashboard.value) {
     upgradeUI().catch(() => {})

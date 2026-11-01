@@ -5,6 +5,8 @@ import { v4 as uuid } from 'uuid'
 import { computed, ref } from 'vue'
 import { sourceIPLabelList } from './settings'
 import { migrateBackendList } from './backend-migration'
+import { canActivateBackend } from './backend-activation'
+import { showNotification } from '@/helper/notification'
 
 type LegacyBackend = Omit<Partial<Backend>, 'type'> & {
   type?: string
@@ -45,7 +47,20 @@ export const activeBackend = computed(() =>
 )
 
 export const setActiveBackend = (uuid: string) => {
+  if (!uuid) {
+    activeUuid.value = ''
+    return true
+  }
+
+  const backend = backendList.value.find((item) => item.uuid === uuid)
+
+  if (!canActivateBackend(backend)) {
+    showNotification({ content: 'singboxNativePending', type: 'alert-warning' })
+    return false
+  }
+
   activeUuid.value = uuid
+  return true
 }
 
 export type BackendManagerView =

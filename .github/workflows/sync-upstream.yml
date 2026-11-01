@@ -19,6 +19,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Fast-forward main from upstream
+        id: compare
         run: |
           git remote add upstream https://github.com/Zephyruso/zashboard.git
           git fetch origin custom
@@ -36,9 +37,12 @@ jobs:
           fi
           if git merge-base --is-ancestor upstream/main origin/custom; then
             echo 'custom already incorporates upstream/main; synchronization is complete'
-            exit 0
+            echo 'needs_sync=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'needs_sync=true' >> "$GITHUB_OUTPUT"
           fi
       - name: Open one reusable custom synchronization PR
+        if: steps.compare.outputs.needs_sync == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

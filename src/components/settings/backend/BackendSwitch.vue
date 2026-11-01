@@ -328,7 +328,7 @@ const toggle = () => (isOpen.value ? close() : open())
 
 const switchTo = (uuid: string) => {
   setActiveBackend(uuid)
-  close()
+  if (activeUuid.value === uuid) close()
 }
 
 const manage = () => {
