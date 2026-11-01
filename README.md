@@ -47,11 +47,9 @@ stable release.
 
 ## **Docker Setup**
 
-To run zashboard via Docker, use the following command:
-
-```
-docker run -d -p 80:80 ghcr.io/choicky/zashboard:latest
-```
+This fork currently does not publish a Docker image. Use the compiled ZIP from
+the fork Release and let sing-box serve it through its dashboard/Clash API
+configuration; do not use an upstream or `ghcr.io/choicky/zashboard` image.
 
 ## Tips
 
@@ -123,5 +121,5 @@ Saved backends and explicit URL backend parameters retain their existing behavio
 ## sing-box integration
 
 See [the compatibility guide](./docs/sing-box-compatibility.md) for the
-verified Clash API scope, configuration examples, update and rollback steps,
-and the OpenWrt/Linux/Windows/Android notes.
+verified Clash and native gRPC-Web API scope, configuration examples, update
+and rollback steps, and the OpenWrt/Linux/Windows/Android notes.

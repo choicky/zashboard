@@ -17,15 +17,15 @@ const backend = {
 
 assert.equal(canActivateBackend({ ...backend, type: 'clash' }), true)
 assert.equal(canActivateBackend({ ...backend, type: 'dae' }), true)
-assert.equal(canActivateBackend({ ...backend, type: 'singbox' }), false)
+assert.equal(canActivateBackend({ ...backend, type: 'singbox' }), true)
 assert.equal(canActivateBackend(undefined), false)
 
 const clashA = { ...backend, uuid: 'clash-a', type: 'clash' }
 const native = { ...backend, uuid: 'native', type: 'singbox' }
 const dae = { ...backend, uuid: 'dae', type: 'dae' }
-assert.equal(nextActivatableBackend([clashA, native, dae], clashA.uuid, 1)?.uuid, dae.uuid)
-assert.equal(nextActivatableBackend([clashA, native, dae], dae.uuid, -1)?.uuid, clashA.uuid)
-assert.equal(nextActivatableBackend([clashA, native], clashA.uuid, 1), undefined)
-assert.equal(firstActivatableBackend([native, dae])?.uuid, dae.uuid)
+assert.equal(nextActivatableBackend([clashA, native, dae], clashA.uuid, 1)?.uuid, native.uuid)
+assert.equal(nextActivatableBackend([clashA, native, dae], dae.uuid, -1)?.uuid, native.uuid)
+assert.equal(nextActivatableBackend([clashA, native], clashA.uuid, 1)?.uuid, native.uuid)
+assert.equal(firstActivatableBackend([native, dae])?.uuid, native.uuid)
 
 console.log('backend activation guard: supported and native scenarios passed')

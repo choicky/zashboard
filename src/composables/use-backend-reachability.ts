@@ -50,13 +50,6 @@ export const useBackendReachability = (form: Ref<ReachabilityTarget>) => {
     const backend = target.value
     if (!backend) return
 
-    if (backend.type === 'singbox') {
-      status.value = 'unsupported'
-      latency.value = 0
-      message.value = 'sing-box native API support is pending'
-      return
-    }
-
     const current = ++generation
     controller = new AbortController()
     const signal = controller.signal

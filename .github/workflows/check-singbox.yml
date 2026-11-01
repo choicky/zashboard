@@ -1,0 +1,63 @@
+name: Check sing-box compatibility
+
+on:
+  schedule:
+    - cron: '41 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'sing-box tag; empty means current stable release'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  stable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.20.0
+      - name: Resolve stable release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          version="$REQUESTED_VERSION"
+          if [ -z "$version" ]; then version="$(gh api repos/SagerNet/sing-box/releases/latest --jq .tag_name)"; fi
+          case "$version" in v*) ;; *) echo 'version must be a sing-box v* tag' >&2; exit 1 ;; esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build and native endpoint smoke
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run type-check
+          pnpm run build
+          gh release download "$VERSION" --repo SagerNet/sing-box --pattern "sing-box-${VERSION#v}-linux-amd64.tar.gz" --dir "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/sing-box-${VERSION#v}-linux-amd64.tar.gz" -C "$RUNNER_TEMP"
+          mkdir -p "$RUNNER_TEMP/sb-ui-test"
+          cat > "$RUNNER_TEMP/sb-ui-test/config.json" <<'JSON'
+          {"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"}],"services":[{"type":"api","listen":"127.0.0.1","listen_port":19092,"secret":"ci-native-secret","access_control_allow_origin":["http://127.0.0.1:19080"],"dashboard":{"enabled":false}}]}
+          JSON
+          "$RUNNER_TEMP/sing-box-${VERSION#v}/sing-box" run -c "$RUNNER_TEMP/sb-ui-test/config.json" > "$RUNNER_TEMP/sb-ui-test/core.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:19092/ >/dev/null 2>&1 && break; sleep 1; done
+          SINGBOX_SECRET=ci-native-secret SINGBOX_EXPECTED_VERSION="${VERSION#v}" node test/singbox-native.mjs
+
+  development:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect testing protocol without changing the pinned source
+        run: |
+          current=$(curl -fsSL https://api.github.com/repos/SagerNet/sing-box/contents/daemon/started_service.proto?ref=testing | jq -r .sha)
+          echo "sing-box testing started_service.proto: $current"
+          echo 'This is an early warning only; it does not rewrite generated files or publish releases.'
