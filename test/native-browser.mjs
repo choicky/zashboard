@@ -61,10 +61,18 @@ try {
     await page.goto(`${app.url}/#/${route}`)
     const ready = await waitFor(
       () =>
-        page.evaluate(`location.hash.includes('${route}') && document.body.innerText.length > 20`),
+        page.evaluate(`
+        location.hash.includes('${route}') &&
+        document.body.innerText.length > 20 &&
+        ('${route}' !== 'proxies' || document.querySelector('[data-group-name]') !== null)
+      `),
       { timeout: 30000, interval: 250 },
     )
-    assert.notEqual(ready, null, `native ${route} page did not load`)
+    assert.notEqual(
+      ready,
+      null,
+      `native ${route} page did not load: ${await page.evaluate('document.body.innerText.slice(0, 1000)')}`,
+    )
     const text = await page.evaluate('document.body.innerText')
     assert.doesNotMatch(text, /Cannot read properties|Unhandled|网络错误/i)
     return text
@@ -77,7 +85,7 @@ try {
   `)
   assert.equal(nativeIdentity, true, 'native core identity/version was not visible')
 
-  const navigationCount = await page.evaluate('performance.getEntriesByType("navigation").length')
+  const pageTimeOrigin = await page.evaluate('performance.timeOrigin')
   const selectNativeNode = await page.evaluate(`(() => {
     const node = [...document.querySelectorAll('*')].find((el) =>
       el.textContent?.trim() === 'direct' && el.closest('[data-group-name]')
@@ -101,7 +109,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 1200))
 
   const modeControl = await page.evaluate(`(() => {
-    const control = [...document.querySelectorAll('select,[role="combobox"],button')].find((el) =>
+    const control = [...document.querySelectorAll('[role="combobox"]')].find((el) =>
       /rule|direct|global/i.test(el.textContent || '')
     )
     if (!control) return false
@@ -160,8 +168,8 @@ try {
     null,
   )
   assert.equal(
-    await page.evaluate('performance.getEntriesByType("navigation").length'),
-    navigationCount,
+    await page.evaluate('performance.timeOrigin'),
+    pageTimeOrigin,
     'backend switching unexpectedly performed a full-page reload',
   )
 
