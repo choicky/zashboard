@@ -14,6 +14,13 @@ assert.equal(compareReleaseTags('sb-v3.31.0-rc1', 'sb-v3.30.0'), 1)
 assert.equal(compareReleaseTags('sb-v3.30.0-rc2', 'sb-v3.30.0-rc3'), -1)
 assert.equal(isReleaseNewer('sb-v3.30.0', 'sb-v3.30.0-rc3'), true)
 assert.equal(isReleaseNewer('sb-v3.30.0', 'sb-v3.31.0-rc1'), false)
+assert.equal(
+  hasNewerStableRelease(
+    [{ tag_name: 'sb-v3.30.0', prerelease: false, draft: false }],
+    'sb-v0.0.0-dev.125199e',
+  ),
+  true,
+)
 assert.equal(compareReleaseTags('v3.30.0', 'sb-v3.30.0'), undefined)
 assert.equal(
   hasNewerStableRelease(

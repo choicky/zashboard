@@ -33,9 +33,9 @@ You can download the zashboard files here:
 
 Fork releases:
 
-- Current prerelease `sb-v3.30.0-rc8` (fixed tag; not stable/latest):
-  [full](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc8/zashboard-singbox-full.zip) and
-  [no-fonts](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc8/zashboard-singbox-no-fonts.zip).
+- Current prerelease `sb-v3.30.0-rc9` (fixed tag; not stable/latest):
+  [full](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc9/zashboard-singbox-full.zip) and
+  [no-fonts](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc9/zashboard-singbox-no-fonts.zip).
 - Future stable releases will use the moving
   [latest/full](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-full.zip) and
   [latest/no-fonts](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-no-fonts.zip)
@@ -107,7 +107,7 @@ For example, with this mihomo configuration on remote server `192.168.1.1`:
 
 ```yaml
 external-ui: ui
-external-ui-url: https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc8/zashboard-singbox-full.zip
+external-ui-url: https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc9/zashboard-singbox-full.zip
 external-controller: 0.0.0.0:9090
 secret: ''
 ```
