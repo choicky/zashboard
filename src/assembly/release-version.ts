@@ -2,7 +2,7 @@ type ReleaseVersion = {
   major: number
   minor: number
   patch: number
-  prerelease: string[]
+  prerelease: (string | number)[]
 }
 
 export type ForkRelease = { tag_name: string; prerelease: boolean; draft: boolean }
