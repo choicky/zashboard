@@ -83,7 +83,11 @@ try {
   const nativeIdentity = await page.evaluate(`
     [...document.querySelectorAll('body *')].some((el) => /sing-box|1\\.14\\./i.test(el.innerText || ''))
   `)
-  assert.equal(nativeIdentity, true, 'native core identity/version was not visible')
+  assert.equal(
+    nativeIdentity,
+    true,
+    `native core identity/version was not visible: ${await page.evaluate("document.body?.innerText?.slice(0, 1500) || '<empty document>'")}`,
+  )
 
   const pageTimeOrigin = await page.evaluate('performance.timeOrigin')
   const selectNativeNode = await page.evaluate(`(() => {
