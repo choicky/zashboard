@@ -102,7 +102,7 @@ For example, with this mihomo configuration on remote server `192.168.1.1`:
 
 ```yaml
 external-ui: ui
-external-ui-url: https://github.com/choicky/zashboard/releases/download/sb-v3.30.0/zashboard-singbox-full.zip
+external-ui-url: https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc1/zashboard-singbox-full.zip
 external-controller: 0.0.0.0:9090
 secret: ''
 ```
