@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug! Before submitting, please search [existing issues](https://github.com/Zephyruso/zashboard/issues) to see if your problem has already been reported.
+        Thanks for reporting a bug! Before submitting, please search [existing issues](https://github.com/choicky/zashboard/issues) to see if your problem has already been reported.
 
         **If at all possible, please include a screen recording or screenshot of the bug** — it is by far the fastest way for us to understand and fix the problem.
 
@@ -15,7 +15,7 @@ body:
     id: zashboard-version
     attributes:
       label: zashboard Version
-      description: The version of zashboard you are using (e.g., 1.81.0 or gh-pages commit hash)
+      description: The version of zashboard you are using (e.g., sb-v3.30.0 or an Actions artifact)
       placeholder: 'e.g., 1.81.0'
     validations:
       required: true

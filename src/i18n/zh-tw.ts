@@ -177,7 +177,7 @@ const zhTW: LANG_MESSAGE = {
   customCSSTip: '以下樣式會原樣注入頁面，無效的規則可能導致介面顯示異常。',
   unavailableProxy: '隱藏不可用節點',
   protocolTips:
-    '您正在嘗試連接一個http後端但zashboard是通過https提供的，這可能會導致連接錯誤，請在瀏覽器設定中允許不安全的內容，或者使用http版本面板例如http://board.zash.run.place',
+    '您正在嘗試連接 HTTP 後端，但面板是透過 HTTPS 提供的。請使用本機/LAN 版本，或在瀏覽器允許不安全內容。',
   global: '全域',
   direct: '直連',
   lowLatencyDesc: '黃色的閾值',

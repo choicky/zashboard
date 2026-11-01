@@ -11,9 +11,7 @@ const isLegacyBackend = (item: LegacyBackend) =>
   !item.type || 'singboxChannel' in item || item.type === 'singbox'
 
 const migrateBackendList = (list: LegacyBackend[]): Backend[] =>
-  list
-    .filter((item) => item.type !== 'singbox')
-    .map((item) => ({ ...(omit(item, 'singboxChannel') as Backend), type: 'clash' }))
+  list.map((item) => ({ ...(omit(item, 'singboxChannel') as Backend), type: 'clash' }))
 
 export const backendList = useStorage<Backend[]>('setup/api-list', [])
 

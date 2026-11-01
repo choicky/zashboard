@@ -1,0 +1,73 @@
+name: Fork build and release
+
+on:
+  push:
+    branches: [custom]
+    tags: ['sb-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - font: all
+            name: zashboard-singbox-full
+          - font: none
+            name: zashboard-singbox-no-fonts
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.20.0
+      - name: Install and build
+        env:
+          FONT: ${{ matrix.font }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          test -f dist/index.html
+          test "$(find dist -type f | wc -l)" -gt 1
+          mkdir -p package
+          cp -a dist package/dist
+          (cd package && zip -qr "../${{ matrix.name }}.zip" dist)
+      - name: Check package and checksum
+        run: |
+          unzip -l "${{ matrix.name }}.zip" | grep -E 'dist/index.html|dist/assets/'
+          sha256sum "${{ matrix.name }}.zip" >> SHA256SUMS
+          printf '%s\n' "${{ matrix.name }}.zip" >> MANIFEST
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            ${{ matrix.name }}.zip
+            MANIFEST
+            SHA256SUMS
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/sb-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+      - name: Assemble manifest and checksums
+        run: |
+          find release -name '*.zip' -exec cp {} . \;
+          find . -maxdepth 1 -name 'zashboard-*.zip' -print -exec sha256sum {} \; > SHA256SUMS
+          find . -maxdepth 1 -name 'zashboard-*.zip' -printf '%f\n' | sort > MANIFEST
+      - uses: softprops/action-gh-release@v3
+        with:
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-test') }}
+          generate_release_notes: true
+          files: |
+            zashboard-*.zip
+            MANIFEST
+            SHA256SUMS

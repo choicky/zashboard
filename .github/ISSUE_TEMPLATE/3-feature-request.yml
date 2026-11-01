@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a feature! Before submitting, please search [existing issues](https://github.com/Zephyruso/zashboard/issues) to see if your idea has already been proposed.
+        Thanks for suggesting a feature! Before submitting, please search [existing issues](https://github.com/choicky/zashboard/issues) to see if your idea has already been proposed.
 
   - type: textarea
     id: feature-description

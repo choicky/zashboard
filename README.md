@@ -1,4 +1,8 @@
-# zashboard
+# choicky/zashboard
+
+This fork keeps the upstream dashboard current while maintaining a
+sing-box-compatible build. `main` mirrors upstream; `custom` is the maintained
+fork branch and is the source of fork releases.
 
 <p align="center">
   <img src="./readme/pc.png" height="300">
@@ -16,44 +20,32 @@ Browser support
 
 ## **Online**
 
-You can access the online zashboard at the following link:
-
-- [Online zashboard](http://board.zash.run.place)
+There is no fork-hosted public dashboard. Serve the ZIP from the sing-box Clash
+API so access stays local/LAN/VPN.
 
 ## **Download**
 
 You can download the zashboard files here:
 
-> [!WARNING]
-> Support for sing-box has been removed. [Learn more about this
-> decision](./docs/sing-box-deprecation.md).
+> This fork restores the sing-box Clash-compatible API path. The historical
+> upstream removal notice is retained for attribution in
+> [docs/sing-box-deprecation.md](./docs/sing-box-deprecation.md).
 
-release:
+Fork releases:
 
-- [dist.zip (7.81 MB)](https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip) – Includes better font-loading experience.
-- [dist-no-fonts.zip (1.44 MB)](https://github.com/Zephyruso/zashboard/releases/latest/download/dist-no-fonts.zip) – No fonts included, uses system fonts only.
-- [dist-cdn-fonts.zip (1.44 MB)](https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip) – Fonts loaded from unpkg.com, If you have trouble connecting to unpkg.com, **you may experience slow page loading**.
-- [dist-firasans-only.zip (1.67 MB)](https://github.com/Zephyruso/zashboard/releases/latest/download/dist-firasans-only.zip) – Only with FiraSans Font
-- [dist-misans-only.zip (3.54 MB)](https://github.com/Zephyruso/zashboard/releases/latest/download/dist-misans-only.zip) – Only with MiSans Font
-- [dist-pingfang-only.zip (3.25 MB)](https://github.com/Zephyruso/zashboard/releases/latest/download/dist-pingfang-only.zip) – Only with PingFang Font
-- [dist-sarasa-only.zip (3.67 MB)](https://github.com/Zephyruso/zashboard/releases/latest/download/dist-sarasa-only.zip) – Only with Sarasa Font
+- [zashboard-singbox-full.zip](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-full.zip) – Full-font build.
+- [zashboard-singbox-no-fonts.zip](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-no-fonts.zip) – Lightweight system-font build.
 
-dev:
-
-- [gh-pages.zip (7.81 MB)](https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip)
-- [gh-pages-no-fonts.zip (1.44 MB)](https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-no-fonts.zip)
-- [gh-pages-cdn-fonts.zip (1.44 MB)](https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-cdn-fonts.zip)
-- [gh-pages-firasans-only.zip (1.67 MB)](https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-firasans-only.zip)
-- [gh-pages-misans-only.zip (3.54 MB)](https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-misans-only.zip)
-- [gh-pages-pingfang-only.zip (3.25 MB)](https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-pingfang-only.zip)
-- [gh-pages-sarasa-only.zip (3.67 MB)](https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-sarasa-only.zip)
+Each release includes `MANIFEST` and `SHA256SUMS`. Test builds are published as
+Actions artifacts or prereleases; daily synchronization never publishes a
+stable release.
 
 ## **Docker Setup**
 
 To run zashboard via Docker, use the following command:
 
 ```
-docker run -d -p 80:80 ghcr.io/zephyruso/zashboard:latest
+docker run -d -p 80:80 ghcr.io/choicky/zashboard:latest
 ```
 
 ## Tips
@@ -110,7 +102,7 @@ For example, with this mihomo configuration on remote server `192.168.1.1`:
 
 ```yaml
 external-ui: ui
-external-ui-url: https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip
+external-ui-url: https://github.com/choicky/zashboard/releases/download/sb-v3.30.0/zashboard-singbox-full.zip
 external-controller: 0.0.0.0:9090
 secret: ''
 ```
@@ -122,3 +114,9 @@ Opening `http://192.168.1.1:9090/ui` automatically connects to `http://192.168.1
 Saved backends and explicit URL backend parameters retain their existing behavior. Automatic same-origin detection does not override them.
 
 ### I code just for fun, not for money. If you really want to donate, please consider donating to [UNICEF](https://www.unicef.org/) to help hungry children.
+
+## sing-box integration
+
+See [the compatibility guide](./docs/sing-box-compatibility.md) for the
+verified Clash API scope, configuration examples, update and rollback steps,
+and the OpenWrt/Linux/Windows/Android notes.

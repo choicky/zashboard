@@ -5,6 +5,7 @@ import { daeCapabilities } from './capabilities'
 
 export enum Core {
   Mihomo = 'mihomo',
+  SingBox = 'sing-box',
   Honk = 'honk',
   Dae = 'dae',
   Unknown = 'unknown',
@@ -35,6 +36,7 @@ export type Cap =
   | 'independentLatency'
   | 'coreUpdateCheck'
   | 'configPatch'
+  | 'networkConfig'
   | 'traceLogLevel'
   | 'silentLogLevel'
   | 'runtimeStats'
@@ -70,30 +72,32 @@ type Caps = Partial<Record<Cap, boolean>>
 
 const clashCaps = computed<Caps>(() => {
   const mihomo = core.value === Core.Mihomo
+  const singBox = core.value === Core.SingBox
   const honk = core.value === Core.Honk
   const mihomoOrForkCore = mihomo || isForkCoreOverride.value
 
   return {
     coreUpgrade: mihomoOrForkCore,
     coreRestart: mihomoOrForkCore,
-    dashboardUpgrade: mihomoOrForkCore,
+    dashboardUpgrade: mihomoOrForkCore || singBox,
     reloadConfigs: mihomoOrForkCore,
     updateConfigs: mihomoOrForkCore,
     updateGeoDatabase: mihomoOrForkCore,
     syncSettings: mihomoOrForkCore,
     independentLatency: mihomoOrForkCore,
     coreUpdateCheck: mihomo,
-    configPatch: mihomo,
+    configPatch: mihomo || singBox,
+    networkConfig: mihomo,
 
-    traceLogLevel: honk,
+    traceLogLevel: honk || singBox,
     silentLogLevel: mihomo,
 
     runtimeStats: honk,
 
     latencyTest: true,
-    proxyProviderUpdate: true,
-    proxyProviderHealthCheck: true,
-    ruleProviders: true,
+    proxyProviderUpdate: !singBox,
+    proxyProviderHealthCheck: !singBox,
+    ruleProviders: !singBox,
     flushDNSCache: true,
     flushFakeIP: true,
     dnsQuery: true,
