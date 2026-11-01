@@ -166,6 +166,7 @@ export default defineComponent({
         )
       const modeSelect = configs.value && can('configPatch') && (
         <SelectInput
+          data-native-mode-control="true"
           class={['select select-sm', isLargeCtrlsBar.value ? 'min-w-40' : 'min-w-24']}
           modelValue={configs.value.mode}
           onUpdate:modelValue={(value) => (configs.value!.mode = value as string)}

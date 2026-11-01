@@ -117,9 +117,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 1200))
 
   const modeControl = await page.evaluate(`(() => {
-    const control = [...document.querySelectorAll('[role="combobox"]')].find((el) =>
-      /rule|direct|global/i.test(el.textContent || '')
-    )
+    const control = document.querySelector('[data-native-mode-control="true"]')
     if (!control) return false
     control.click()
     const option = [...document.querySelectorAll('[role="option"],option,button')].find((el) =>
