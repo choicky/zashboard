@@ -11,6 +11,7 @@ import type { Backend } from '@/types'
 import { computed, nextTick, ref, watch } from 'vue'
 import { can, core, Core, resetCore } from './backend'
 import { fetchCapabilities, resetCapabilities } from './capabilities'
+import { runOptionalCoreUpdateCheck } from './core-update'
 import { driver } from './driver'
 import { hasNewerStableRelease, type ForkRelease } from './release-version'
 
@@ -126,11 +127,22 @@ const probeBackendVersion = async (backend: Backend) => {
 
   if (!can('coreUpdateCheck') || !checkUpgradeCore.value || backend.disableUpgradeCore) return
 
-  isCoreUpdateAvailable.value = await fetchIsCoreUpdateAvailable()
-
-  if (isCoreUpdateAvailable.value && autoUpgradeCore.value) {
-    upgradeCore('auto').catch(() => {})
-  }
+  const updateGeneration = backendGeneration
+  const backendUuid = backend.uuid
+  const updateVersion = mihomo.value?.[1] ?? versionString
+  const updateChannel = MIHOMO_CHANNEL[mihomo.value?.[0] ?? MIHOMO.Meta]
+  runOptionalCoreUpdateCheck({
+    check: () => fetchIsCoreUpdateAvailable(updateChannel.check_update_url, updateVersion),
+    isCurrent: () =>
+      backendGeneration === updateGeneration && activeBackend.value?.uuid === backendUuid,
+    onResult: (available) => {
+      isCoreUpdateAvailable.value = available
+      if (available && autoUpgradeCore.value) upgradeCore('auto').catch(() => {})
+    },
+    onFailure: () => {
+      isCoreUpdateAvailable.value = false
+    },
+  })
 }
 
 let probe: Promise<void> = Promise.resolve()
@@ -155,12 +167,8 @@ export const probeActiveBackend = () => {
   return probe
 }
 
-const fetchIsCoreUpdateAvailable = async () => {
-  const versionNumber = mihomo.value?.[1] ?? version.value
-  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(
-    MIHOMO_CHANNEL[mihomo.value?.[0] ?? MIHOMO.Meta].check_update_url,
-    versionNumber,
-  )
+const fetchIsCoreUpdateAvailable = async (url: string, versionNumber: string) => {
+  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(url, versionNumber)
 
   return !assets.some(({ name }) => name.includes(versionNumber))
 }

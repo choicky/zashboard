@@ -98,6 +98,10 @@ PR 的隔离验收配置同时启用了官方 Clash API mode 服务，已在真�
 不依赖长期 PAT。计划任务要求 workflow 已在仓库默认分支启用；由 token 产生的 PR
 不会自动触发后续 workflow 时，手动运行必须选择明确的 PR merge ref。
 
+核心版本探测成功后，Mihomo 的 GitHub 更新检查在后台作为可选操作执行；超时、限流
+或网络错误只会清除更新提示，不会阻断已验证的会话。若用户在检查期间切换后端，
+旧后端的结果会被丢弃。native sing-box 的核心升级能力仍保持关闭。
+
 ## 上游同步
 
 `.github/workflows/sync-upstream.yml` 每日运行并支持手动触发：只在 `main` 没有

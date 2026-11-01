@@ -10,6 +10,7 @@ import { initLogs, stopLogs } from './logs'
 import { initSatistic, stopSatistic } from './overview'
 import { fetchProxies } from './proxies'
 import { fetchRules } from './rules'
+import { runSessionAfterProbe } from './session-boundary'
 import { createSessionGate } from './session-gate'
 import { probeActiveBackend } from './version'
 
@@ -66,30 +67,24 @@ export const startBackendSession = async () => {
     return
   }
 
-  try {
-    await probeActiveBackend()
-  } catch {
-    // backendProbe contains the user-visible error. Keep the selected backend
-    // and stop at the session boundary; never initialize against an unverified core.
-    return
-  }
+  await runSessionAfterProbe(probeActiveBackend, async () => {
+    if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
+      return
 
-  if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
-    return
+    await Promise.allSettled([fetchConfigs(), fetchProxies(), fetchRules()])
 
-  await Promise.allSettled([fetchConfigs(), fetchProxies(), fetchRules()])
+    if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
+      return
 
-  if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
-    return
+    initConnections()
+    initLogs()
+    initSatistic()
+    initEvents()
 
-  initConnections()
-  initLogs()
-  initSatistic()
-  initEvents()
-
-  if (activeBackend.value.type === 'dae') {
-    fetchDaeRuntime().catch(() => {})
-  }
+    if (activeBackend.value.type === 'dae') {
+      fetchDaeRuntime().catch(() => {})
+    }
+  })
 }
 
 watch(activeBackend, startBackendSession, { immediate: true })
