@@ -63,7 +63,7 @@ try {
       () =>
         page.evaluate(`
         location.hash.includes('${route}') &&
-        document.body.innerText.length > 20 &&
+        (document.body?.innerText?.length || 0) > 20 &&
         ('${route}' !== 'proxies' || document.querySelector('[data-group-name]') !== null)
       `),
       { timeout: 30000, interval: 250 },
