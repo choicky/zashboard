@@ -31,6 +31,8 @@ const resolveChrome = () => {
 export const launchChrome = async ({ port = 9222, headless = true, args = [] } = {}) => {
   const binary = resolveChrome()
   const userDataDir = await mkdtemp(join(tmpdir(), 'zashboard-perf-'))
+  const linuxFlags = process.platform === 'linux' ? ['--no-sandbox', '--disable-dev-shm-usage'] : []
+  let stderr = ''
   const child = spawn(
     binary,
     [
@@ -41,14 +43,18 @@ export const launchChrome = async ({ port = 9222, headless = true, args = [] } =
       '--no-default-browser-check',
       '--disable-gpu',
       '--disable-extensions',
+      ...linuxFlags,
       // 后台标签页会被降频,基准数据会失真
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       ...args,
       'about:blank',
     ].filter(Boolean),
-    { stdio: 'ignore' },
+    { stdio: ['ignore', 'ignore', 'pipe'] },
   )
+  child.stderr.on('data', (chunk) => {
+    stderr = (stderr + chunk.toString()).slice(-2000)
+  })
 
   for (let i = 0; i < 100; i++) {
     try {
@@ -74,5 +80,7 @@ export const launchChrome = async ({ port = 9222, headless = true, args = [] } =
 
   child.kill()
   await rm(userDataDir, { recursive: true, force: true })
-  throw new Error(`Chrome 起来了但 ${port} 端口的调试接口没响应`)
+  throw new Error(
+    `Chrome 起来了但 ${port} 端口的调试接口没响应${stderr ? `\n${stderr}` : ''}`,
+  )
 }

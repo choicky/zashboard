@@ -26,6 +26,7 @@ const ru: LANG_MESSAGE = {
   password: 'Пароль',
   token: 'Токен',
   backendType: 'Тип бэкенда',
+  singboxNativePending: 'Поддержка нативного API sing-box ожидает восстановления',
   submit: 'Отправить',
   cancel: 'Отмена',
   delete: 'Удалить',

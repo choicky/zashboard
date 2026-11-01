@@ -33,8 +33,13 @@ You can download the zashboard files here:
 
 Fork releases:
 
-- [zashboard-singbox-full.zip](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-full.zip) – Full-font build.
-- [zashboard-singbox-no-fonts.zip](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-no-fonts.zip) – Lightweight system-font build.
+- Current prerelease `sb-v3.30.0-rc1` (fixed tag; not stable/latest):
+  [full](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc1/zashboard-singbox-full.zip) and
+  [no-fonts](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc1/zashboard-singbox-no-fonts.zip).
+- Future stable releases will use the moving
+  [latest/full](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-full.zip) and
+  [latest/no-fonts](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-no-fonts.zip)
+  URLs only after a stable release exists.
 
 Each release includes `MANIFEST` and `SHA256SUMS`. Test builds are published as
 Actions artifacts or prereleases; daily synchronization never publishes a
@@ -54,7 +59,7 @@ docker run -d -p 80:80 ghcr.io/choicky/zashboard:latest
 2. Right-clicking on a node / node group card will perform a speedtest for the node / node group.
 3. The proxy group sorting is based on the node order in the GLOBAL group, which follows the configuration file order. If you need custom ordering, you can specify the order by overriding the GLOBAL group.
 4. The dashboard supports PWA (Progressive Web App), which can provide a native app-like experience on mobile devices through "Add to Home Screen".
-5. The dashboard's upgrade button and auto-upgrade functionality require proper configuration of the core's UI download path ([mihomo](https://wiki.metacubex.one/config/general/#_9)), otherwise clicking update may result in updating to the core's default panel.
+5. Dashboard upgrade is enabled only for verified Mihomo-compatible core paths. It is disabled for sing-box until the complete real-core update and rollback path is verified; use the fixed-tag manual update procedure in the compatibility guide.
 
 ## 提示
 
@@ -62,7 +67,7 @@ docker run -d -p 80:80 ghcr.io/choicky/zashboard:latest
 2. 右键点击节点/节点组卡片可对节点/节点组进行测速。
 3. 面板的节点组排序是根据GLOBAL组中的节点顺序排序的，即按配置文件的顺序，如果你需要自定义顺序，可通过覆盖GLOBAL组指定顺序
 4. 面板支持PWA（Progressive Web App），可以在移动设备上通过"添加到主屏幕"获得类原生app的体验
-5. 面板的更新按钮和自动更新功能需要正确的配置核心的ui下载路径 ([mihomo](https://wiki.metacubex.one/config/general/#_9)), 否则可能会在点击更新后更新为核心默认面板
+5. 面板升级仅对已验证的 Mihomo 兼容核心路径开启。sing-box 的完整真实核心升级及回滚路径尚未验证，因此暂时关闭，请按兼容性指南使用固定标签手动更新。
 
 ## URL params format
 

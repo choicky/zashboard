@@ -21,7 +21,7 @@ provider 操作。
 
 | 核心 | 用途 | 状态 |
 | --- | --- | --- |
-| sing-box 1.14.x | 选定稳定基线；当前发布线且包含 `/ui` 下载与 Clash API 路由 | 阻塞发布前验证 |
+| sing-box 1.14.4 | 选定稳定基线；已用分发二进制验证 Clash API、`/ui` 下载和页面加载 | 已通过 endpoint smoke；UI 见下文 |
 | sing-box 当前 stable | 发行前回归 | 手动触发，阻塞该版本发布 |
 | sing-box 1.15.0-alpha | API 变化早期预警 | 非阻塞 |
 | Mihomo 当前稳定 | 上游回归 | 必须保持通过 |
@@ -60,8 +60,9 @@ provider 操作。
 并恢复 `external_ui` 指向旧目录。移动更新 URL（例如 `/releases/latest/`）只适合
 明确接受漂移的测试环境；生产建议固定 `sb-vX.Y.Z`。
 
-本阶段未声称已验证 sing-box 版本中的面板内 `/upgrade/ui` 更新闭环；该按钮
-依赖 sing-box 自己的 `external_ui_download_url`，不能改写为 upstream URL。
+sing-box 的面板内 `/upgrade/ui` 完整更新、失败保留旧版本、回滚和 PWA cache
+更新闭环尚未在真实核心上完成验证，因此 sing-box 能力表明确关闭
+`dashboardUpgrade`，不会显示一个必然失败的升级控件，也不会改写到 upstream URL。
 在该闭环得到真实核心集成证据前，请使用上述手动更新方法。
 
 ### 平台
@@ -73,9 +74,19 @@ provider 操作。
 
 ## 测试与限制
 
-已执行的是源代码、类型和构建检查；尚未执行真实 sing-box 二进制驱动的
-下载、解压、`/ui` 刷新、PWA cache 更新、连接关闭和 mode 切换验收，也未执行
-native gRPC Phase 2。没有这些证据时，不把“HTTP 能连通”描述为完整兼容。
+已执行：迁移三场景回归、TypeScript、生产构建、隔离的 sing-box 1.14.4
+分发二进制 endpoint smoke（版本、代理、连接、按 ID 关闭、日志、mode、`/ui`
+响应和固定 fork 下载包）、设置页浏览器测试，以及代理页浏览器测试（节点选择、
+测速、路由往返、搜索和大列表渲染）。浏览器 harness 使用真实 Chrome；Chrome
+调试端点不可用会使测试失败，不计为通过。未执行：真实核心的下载失败回滚、PWA
+cache 更新和面板内升级闭环；也未执行 native gRPC Phase 2。因此 endpoint smoke
+不等于完整 UI/原生兼容。
+
+当前 browser acceptance 与 endpoint smoke 是分开的证据：`pnpm test:setup`
+覆盖后端 URL/保存设置迁移路径，`pnpm test:verify` 覆盖代理页节点选择和测速等
+实际 UI 行为；原生 sing-box 后端在 UI 中显示 pending、不可激活，不会伪装成
+Clash。日志、mode、连接关闭的真实核心 endpoint 已验证，但 native UI 通道仍待
+Phase 2。
 
 Phase 2 native API 仍是后续 stacked work：需要重新固定 distributed binary 的
 service name/auth/transport/API version，生成 protobuf 文件并验证取消、重连、
@@ -88,7 +99,9 @@ closed connection 和资源清理；当前版本会明确使用 Clash API，不�
 提交或分叉会失败并保留现场。随后为 `custom` 创建一个可审阅的同步 PR，冲突由
 维护者解决，不会自动选择 upstream 覆盖兼容代码。由于 GitHub 使用
 `GITHUB_TOKEN` 触发的 PR 不会继续触发后续 workflow，PR 检查请手动点
-Actions 的 workflow_dispatch；不要求额外长期 PAT。
+Actions 的 workflow_dispatch，并明确输入目标 PR 编号（例如 `1`）；该 workflow
+检出 `refs/pull/1/merge`，因此验证的是拟合并结果而不是当前 custom 分支。不要求
+额外长期 PAT。
 
 自助处理冲突：在本地 `git fetch --all`，确认 `main` 只含 upstream 祖先后
 `git switch main && git merge --ff-only upstream/main`，再从 `custom` 合并

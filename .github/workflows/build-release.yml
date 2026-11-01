@@ -30,6 +30,7 @@ jobs:
       - name: Install and build
         env:
           FONT: ${{ matrix.font }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           pnpm install --frozen-lockfile
           pnpm run build
@@ -42,7 +43,12 @@ jobs:
         run: |
           unzip -l "${{ matrix.name }}.zip" | grep -E 'dist/index.html|dist/assets/'
           sha256sum "${{ matrix.name }}.zip" >> SHA256SUMS
-          printf '%s\n' "${{ matrix.name }}.zip" >> MANIFEST
+          {
+            printf 'release_tag=%s\n' "$GITHUB_REF_NAME"
+            printf 'source_sha=%s\n' "$GITHUB_SHA"
+            printf 'release_identity=%s\n' "$GITHUB_REF_NAME"
+            printf 'artifact=%s\n' "${{ matrix.name }}.zip"
+          } > MANIFEST
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
@@ -55,14 +61,43 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/sb-v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Enforce release provenance
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin custom
+          if [[ "$GITHUB_REF_NAME" =~ ^sb-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            test "$(git rev-parse origin/custom)" = "$GITHUB_SHA" || {
+              echo 'stable releases must point exactly at custom' >&2
+              exit 1
+            }
+          else
+            git merge-base --is-ancestor origin/custom "$GITHUB_SHA" || {
+              echo 'prereleases must be based on reviewed custom work' >&2
+              exit 1
+            }
+            count=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.base.ref == "custom")] | length')
+            test "$count" -gt 0 || {
+              echo 'prerelease source must be associated with a PR targeting custom' >&2
+              exit 1
+            }
+          fi
       - uses: actions/download-artifact@v8
         with:
           path: release
       - name: Assemble manifest and checksums
         run: |
           find release -name '*.zip' -exec cp {} . \;
-          find . -maxdepth 1 -name 'zashboard-*.zip' -print -exec sha256sum {} \; > SHA256SUMS
-          find . -maxdepth 1 -name 'zashboard-*.zip' -printf '%f\n' | sort > MANIFEST
+          {
+            printf 'release_tag=%s\n' "$GITHUB_REF_NAME"
+            printf 'source_sha=%s\n' "$GITHUB_SHA"
+            printf 'release_identity=%s\n' "$GITHUB_REF_NAME"
+            find . -maxdepth 1 -name 'zashboard-*.zip' -printf 'artifact=%f\n' | sort
+          } > MANIFEST
+          find . -maxdepth 1 -name 'zashboard-*.zip' -exec sha256sum {} \; | sort > SHA256SUMS
       - uses: softprops/action-gh-release@v3
         with:
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-test') }}

@@ -24,6 +24,7 @@ const en = {
   password: 'Password',
   token: 'Token',
   backendType: 'Backend type',
+  singboxNativePending: 'sing-box native API support is pending',
   submit: 'Submit',
   cancel: 'Cancel',
   delete: 'Delete',

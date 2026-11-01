@@ -26,6 +26,7 @@ const zh: LANG_MESSAGE = {
   password: '密码',
   token: '令牌',
   backendType: '后端类型',
+  singboxNativePending: 'sing-box 原生 API 支持尚未恢复',
   submit: '提交',
   cancel: '取消',
   delete: '删除',

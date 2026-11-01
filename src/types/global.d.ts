@@ -1,4 +1,5 @@
 declare const __APP_VERSION__: string
+declare const __BUILD_RELEASE_TAG__: string
 declare const __COMMIT_ID__: string
 declare const __FONT__: string
 

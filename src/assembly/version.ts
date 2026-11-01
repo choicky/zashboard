@@ -17,6 +17,7 @@ export const version = ref()
 export const isCoreUpdateAvailable = ref(false)
 export const isUIUpdateAvailable = ref(false)
 export const zashboardVersion = ref(__APP_VERSION__)
+export const zashboardReleaseTag = ref(__BUILD_RELEASE_TAG__)
 
 export type BackendProbe = {
   uuid: string
@@ -150,12 +151,35 @@ const fetchIsCoreUpdateAvailable = async () => {
 }
 
 export const checkUIUpdate = async () => {
-  const { tag_name } = await fetchWithLocalCache<{ tag_name: string }>(
-    'https://api.github.com/repos/choicky/zashboard/releases/latest',
-    zashboardVersion.value,
+  if (!can('dashboardUpgrade')) {
+    isUIUpdateAvailable.value = false
+    return
+  }
+
+  type Release = { tag_name: string; prerelease: boolean; draft: boolean }
+  let releases: Release[]
+
+  try {
+    releases = await fetchWithLocalCache<Release[]>(
+      'https://api.github.com/repos/choicky/zashboard/releases?per_page=30',
+      zashboardReleaseTag.value,
+    )
+  } catch {
+    // A fork with only prereleases has no stable "latest" release yet.
+    isUIUpdateAvailable.value = false
+    return
+  }
+
+  const latestStable = releases.find(
+    (release) =>
+      !release.draft && !release.prerelease && /^sb-v\d+\.\d+\.\d+$/.test(release.tag_name),
   )
 
-  isUIUpdateAvailable.value = Boolean(tag_name && tag_name !== `v${zashboardVersion.value}`)
+  // Compare the complete fork tag. In particular, sb-v3.30.0-rc1 must not be
+  // compared to v3.30.0 or repeatedly trigger an automatic update.
+  isUIUpdateAvailable.value = Boolean(
+    latestStable && latestStable.tag_name !== zashboardReleaseTag.value,
+  )
 
   if (isUIUpdateAvailable.value && autoUpgradeDashboard.value) {
     upgradeUI().catch(() => {})

@@ -41,7 +41,7 @@ export const useBackendListProbe = (enabled: Ref<boolean>) => {
 
       results.value[backend.uuid] = result.ok
         ? { status: 'online', latency: result.latency }
-        : { status: 'offline', latency: 0 }
+        : { status: result.kind === 'unsupported' ? 'unsupported' : 'offline', latency: 0 }
     })
   }
 

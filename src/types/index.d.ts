@@ -1,7 +1,7 @@
 export * from './dae'
 import type { DaeConnectionRawMessage } from './dae'
 
-export type BackendType = 'clash' | 'dae'
+export type BackendType = 'clash' | 'dae' | 'singbox'
 
 export type Backend = {
   type: BackendType

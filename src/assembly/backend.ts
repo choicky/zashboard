@@ -79,7 +79,7 @@ const clashCaps = computed<Caps>(() => {
   return {
     coreUpgrade: mihomoOrForkCore,
     coreRestart: mihomoOrForkCore,
-    dashboardUpgrade: mihomoOrForkCore || singBox,
+    dashboardUpgrade: mihomoOrForkCore,
     reloadConfigs: mihomoOrForkCore,
     updateConfigs: mihomoOrForkCore,
     updateGeoDatabase: mihomoOrForkCore,

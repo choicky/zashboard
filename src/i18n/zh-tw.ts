@@ -26,6 +26,7 @@ const zhTW: LANG_MESSAGE = {
   password: '密碼',
   token: '權杖',
   backendType: '後端類型',
+  singboxNativePending: 'sing-box 原生 API 支援尚未恢復',
   submit: '提交',
   cancel: '取消',
   delete: '刪除',

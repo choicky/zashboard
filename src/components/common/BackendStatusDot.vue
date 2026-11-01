@@ -40,6 +40,8 @@ const dotClass = computed(() => {
       return 'bg-backend-online'
     case 'offline':
       return 'bg-error'
+    case 'unsupported':
+      return 'bg-warning'
     default:
       return 'bg-base-content/25'
   }

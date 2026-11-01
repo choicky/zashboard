@@ -109,6 +109,7 @@ const model = defineModel<Omit<Backend, 'uuid'>>({ required: true })
 const backendTypeOptions = [
   { value: 'clash' as BackendType, label: 'Clash' },
   { value: 'dae' as BackendType, label: 'dae' },
+  { value: 'singbox' as BackendType, label: 'sing-box native (pending)' },
 ]
 
 const isDae = computed(() => model.value.type === 'dae')

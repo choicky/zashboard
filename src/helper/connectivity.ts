@@ -1,6 +1,6 @@
 import { i18n } from '@/i18n'
 
-export type ProbeFailureKind = 'unauthorized' | 'http' | 'timeout' | 'network'
+export type ProbeFailureKind = 'unauthorized' | 'http' | 'timeout' | 'network' | 'unsupported'
 
 export type ProbeResult =
   | { ok: true; latency: number }
@@ -70,6 +70,8 @@ export const describeProbeFailure = async (
   const t = i18n.global.t
 
   switch (failure.kind) {
+    case 'unsupported':
+      return t('singboxNativePending')
     case 'unauthorized':
       return t('diagnosisUnauthorized')
     case 'http':

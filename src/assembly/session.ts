@@ -56,6 +56,12 @@ export const startBackendSession = async () => {
     return
   }
 
+  if (activeBackend.value.type === 'singbox') {
+    // Native entries are deliberately retained but must not fall through to
+    // the Clash driver while the native API implementation is pending.
+    return
+  }
+
   await probeActiveBackend().catch(() => {})
 
   fetchConfigs()
