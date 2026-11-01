@@ -93,7 +93,6 @@ try {
     `native core identity/version was not visible: ${await page.evaluate("document.body?.innerText?.slice(0, 1500) || '<empty document>'")}`,
   )
 
-  const pageTimeOrigin = await page.evaluate('performance.timeOrigin')
   const selectNativeNode = await page.evaluate(`(() => {
     const node = [...document.querySelectorAll('*')].find((el) =>
       el.textContent?.trim() === 'direct' && el.closest('[data-group-name]')
@@ -155,7 +154,6 @@ try {
     ),
     null,
   )
-
   // Switch to the Phase 1 Clash channel through the visible backend selector,
   // without a full-page reload. This also exercises native stream disposal.
   await page.goto(`${app.url}/#/settings?section=backend`)
@@ -168,6 +166,7 @@ try {
     ),
     null,
   )
+  const pageTimeOrigin = await page.evaluate('performance.timeOrigin')
   await page.evaluate(`(() => {
     const trigger = document.querySelector('[data-backend-switch-trigger="true"]')
     if (!trigger) throw new Error('backend switch trigger not found')
