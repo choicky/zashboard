@@ -3,6 +3,7 @@
     <button
       v-if="compact"
       ref="triggerRef"
+      data-backend-switch-trigger="true"
       class="btn btn-circle btn-sm"
       :aria-label="$t('backend')"
       @click="toggle"
@@ -14,6 +15,7 @@
     <button
       v-else
       ref="triggerRef"
+      data-backend-switch-trigger="true"
       class="btn btn-sm w-full flex-nowrap justify-between font-normal"
       @click="toggle"
     >

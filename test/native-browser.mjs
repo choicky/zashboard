@@ -169,9 +169,7 @@ try {
     null,
   )
   await page.evaluate(`(() => {
-    const trigger = [...document.querySelectorAll('button')].find((el) =>
-      /native-sing-box/.test(el.textContent || '')
-    )
+    const trigger = document.querySelector('[data-backend-switch-trigger="true"]')
     if (!trigger) throw new Error('backend switch trigger not found')
     trigger.click()
   })()`)
