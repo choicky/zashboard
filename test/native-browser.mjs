@@ -147,9 +147,12 @@ try {
   // Reload exercises reconnect and must not leave the selected native session stale.
   await page.reload()
   assert.notEqual(
-    await waitFor(() => page.evaluate(`document.body.innerText.match(/auto|direct/i) !== null`), {
-      timeout: 30000,
-    }),
+    await waitFor(
+      () => page.evaluate(`(document.body?.innerText || '').match(/auto|direct/i) !== null`),
+      {
+        timeout: 30000,
+      },
+    ),
     null,
   )
 
@@ -162,9 +165,12 @@ try {
     if (!trigger) throw new Error('backend switch trigger not found')
     trigger.click()
   })()`)
-  await waitFor(() => page.evaluate(`document.body.innerText.includes('clash-regression')`), {
-    timeout: 10000,
-  })
+  await waitFor(
+    () => page.evaluate(`(document.body?.innerText || '').includes('clash-regression')`),
+    {
+      timeout: 10000,
+    },
+  )
   await page.evaluate(`(() => {
     const target = [...document.querySelectorAll('button')].find((el) =>
       el.textContent?.trim() === 'clash-regression'
@@ -176,7 +182,7 @@ try {
     await waitFor(
       () =>
         page.evaluate(
-          `localStorage.getItem('setup/active-uuid') === 'clash' && document.body.innerText.match(/Group-|Node-/i) !== null`,
+          `localStorage.getItem('setup/active-uuid') === 'clash' && (document.body?.innerText || '').match(/Group-|Node-/i) !== null`,
         ),
       {
         timeout: 30000,
