@@ -85,7 +85,7 @@ try {
     [...document.querySelectorAll('[data-core-brand]')].some((el) =>
       /SagerNet\\/sing-box/i.test(el.dataset.coreBrand || '') && /1\\.14\\./i.test(el.dataset.coreVersion || '')
     ) ||
-    [...document.querySelectorAll('button')].some((el) => /native-sing-box/i.test(el.textContent || ''))
+    document.querySelector('[data-active-backend-type="singbox"]') !== null
   `)
   assert.equal(
     nativeIdentity,
