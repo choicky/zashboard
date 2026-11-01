@@ -181,21 +181,28 @@ const waitForNativeLatency = (names: string[], timeout: number, backend: Backend
     }),
   )
 
-  return new Promise<Record<string, number>>((resolve, reject) => {
+  let finish: (error?: Error, value?: Record<string, number>) => void = () => {}
+  let stop = () => {}
+  const promise = new Promise<Record<string, number>>((resolve, reject) => {
+    let settled = false
+    const complete = (error?: Error, value?: Record<string, number>) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      stop()
+      if (error) reject(error)
+      else resolve(value!)
+    }
+    finish = complete
     const timer = setTimeout(
-      () => {
-        stop()
-        reject(new Error('sing-box URLTest result timeout'))
-      },
+      () => complete(new Error('sing-box URLTest result timeout')),
       Math.max(1000, timeout) + 1000,
     )
-    const stop = watch(
+    stop = watch(
       [proxyMap, activeBackend],
       () => {
         if (activeBackend.value?.uuid !== backend.uuid) {
-          clearTimeout(timer)
-          stop()
-          reject(new Error('sing-box URLTest session changed'))
+          complete(new Error('sing-box URLTest session changed'))
           return
         }
         const result = Object.fromEntries(
@@ -213,14 +220,13 @@ const waitForNativeLatency = (names: string[], timeout: number, backend: Backend
             .filter(([, delay]) => delay > 0),
         )
         if (Object.keys(result).length === names.length) {
-          clearTimeout(timer)
-          stop()
-          resolve(result)
+          complete(undefined, result)
         }
       },
       { deep: true },
     )
   })
+  return { promise, cancel: (error: Error) => finish(error) }
 }
 
 const runNativeURLTest = async (names: string[], timeout: number, requestTag = names[0]) => {
@@ -228,11 +234,25 @@ const runNativeURLTest = async (names: string[], timeout: number, requestTag = n
   const client = getSingboxClient(backend)
   if (!client || !backend || names.length === 0)
     throw new Error('sing-box URLTest target unavailable')
-  const result = waitForNativeLatency(names, timeout, backend)
-  await client.client.uRLTest({ outboundTag: requestTag })
-  if (activeBackend.value?.uuid !== backend.uuid)
-    throw new Error('sing-box URLTest session changed')
-  return result
+  const waiter = waitForNativeLatency(names, timeout, backend)
+  try {
+    await client.client.uRLTest({ outboundTag: requestTag })
+    if (activeBackend.value?.uuid !== backend.uuid)
+      throw new Error('sing-box URLTest session changed')
+    return await waiter.promise
+  } catch (error) {
+    waiter.cancel(error instanceof Error ? error : new Error(String(error)))
+    await waiter.promise.catch(() => {})
+    throw error
+  }
+}
+
+const resolveLatencyTargets = (name: string, seen = new Set<string>()): string[] => {
+  if (seen.has(name)) return []
+  seen.add(name)
+  const proxy = proxyMap.value[name]
+  if (!proxy?.all?.length) return [name]
+  return proxy.all.flatMap((child) => resolveLatencyTargets(child, seen))
 }
 
 const splitHostPort = (value: string): [string, string] => {
@@ -408,7 +428,7 @@ export const singboxDriver: Driver = {
     },
     testProviderNode: async () => unsupported('provider latency'),
     testGroup: async (group, _url, timeout) => {
-      const names = proxyMap.value[group]?.all ?? [group]
+      const names = resolveLatencyTargets(group)
       return runNativeURLTest(names, timeout, group)
     },
     updateProvider: async () => unsupported('provider update'),
