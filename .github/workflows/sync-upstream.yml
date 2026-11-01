@@ -21,6 +21,7 @@ jobs:
       - name: Fast-forward main from upstream
         run: |
           git remote add upstream https://github.com/Zephyruso/zashboard.git
+          git fetch origin custom
           git fetch upstream main
           if ! git merge-base --is-ancestor HEAD upstream/main; then
             echo 'main has fork-only commits or has diverged; refusing overwrite' >&2
