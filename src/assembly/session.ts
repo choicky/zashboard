@@ -10,6 +10,7 @@ import { initLogs, stopLogs } from './logs'
 import { initSatistic, stopSatistic } from './overview'
 import { fetchProxies } from './proxies'
 import { fetchRules } from './rules'
+import { createSessionGate } from './session-gate'
 import { probeActiveBackend } from './version'
 
 const EVENT_DEBOUNCE = 400
@@ -17,6 +18,7 @@ const EVENT_DEBOUNCE = 400
 let events: { close: () => void } | undefined
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 let sessionDriver: Driver | undefined
+const sessionGate = createSessionGate()
 
 const scheduleRefresh = () => {
   clearTimeout(refreshTimer)
@@ -47,6 +49,8 @@ const initEvents = () => {
 }
 
 export const startBackendSession = async () => {
+  const generation = sessionGate.begin()
+  const selectedBackend = activeBackend.value
   const nextDriver = driver()
   sessionDriver?.reset?.()
   sessionDriver = activeBackend.value ? nextDriver : undefined
@@ -57,16 +61,21 @@ export const startBackendSession = async () => {
   stopEvents()
   nextDriver.reset?.()
 
-  if (!activeBackend.value) {
+  if (!selectedBackend) {
     probeActiveBackend()
     return
   }
 
   await probeActiveBackend().catch(() => {})
 
-  fetchConfigs()
-  fetchProxies()
-  fetchRules()
+  if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
+    return
+
+  await Promise.allSettled([fetchConfigs(), fetchProxies(), fetchRules()])
+
+  if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
+    return
+
   initConnections()
   initLogs()
   initSatistic()

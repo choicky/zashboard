@@ -12,6 +12,17 @@ import {
 } from '@connectrpc/connect'
 import { createGrpcWebTransport } from '@connectrpc/connect-web'
 
+export const PINNED_SINGBOX_API_VERSION = 4
+
+export const validateSingboxVersion = (version: { version: string; apiVersion: number }) => {
+  if (version.apiVersion !== PINNED_SINGBOX_API_VERSION) {
+    throw new Error(
+      `Unsupported sing-box native API version ${version.apiVersion}; expected ${PINNED_SINGBOX_API_VERSION} (protocol pinned to v1.14.4)`,
+    )
+  }
+  return version
+}
+
 const authInterceptor = (secret: string): Interceptor => {
   return (next) => (request) => {
     if (secret) request.header.set('Authorization', `Bearer ${secret}`)
@@ -83,7 +94,7 @@ export const probeSingboxChannel = async (
   signal?.addEventListener('abort', onAbort, { once: true })
 
   try {
-    await client.getVersion({}, { signal: controller.signal })
+    validateSingboxVersion(await client.getVersion({}, { signal: controller.signal }))
     return { ok: true, latency: latency() }
   } catch (e) {
     const code = e instanceof ConnectError ? e.code : undefined
@@ -96,11 +107,15 @@ export const probeSingboxChannel = async (
       return { ok: false, latency: latency(), kind: 'timeout', message: 'Timeout' }
     }
 
-    // Unimplemented 意味着地址连得上、但对面不是 sing-box API(或路径不对)。
+    // Unimplemented 或 API version 不匹配意味着地址可达但不能使用 pinned 协议。
     return {
       ok: false,
       latency: latency(),
-      kind: code === Code.Unimplemented ? 'http' : 'network',
+      kind:
+        code === Code.Unimplemented ||
+        (e instanceof Error && e.message.startsWith('Unsupported sing-box native API'))
+          ? 'http'
+          : 'network',
       message: e instanceof Error ? e.message : String(e),
     }
   } finally {

@@ -20,7 +20,7 @@
     "prepare": "husky",
     "preview": "vite preview",
     "test:bench": "node test/bench.mjs",
-    "test:compat": "node --experimental-strip-types test/backend-migration.mjs && node --experimental-strip-types test/backend-activation.mjs && node --experimental-strip-types test/release-version.mjs && node --experimental-strip-types test/sync-upstream.mjs",
+    "test:compat": "node --experimental-strip-types test/backend-migration.mjs && node --experimental-strip-types test/backend-activation.mjs && node --experimental-strip-types test/release-version.mjs && node --experimental-strip-types test/sync-upstream.mjs && node --experimental-strip-types test/native-regression.mjs",
     "test:mock": "node test/mock-server.mjs",
     "test:native": "node test/singbox-native.mjs",
     "test:setup": "node test/setup.mjs",

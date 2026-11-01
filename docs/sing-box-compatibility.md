@@ -26,7 +26,8 @@ USB/IP、OpenVPN、Taildrop 等扩展。sing-box dashboard 自动更新闭环仍
 | sing-box `testing`              | 监测协议和构建变化                                | 非阻塞早期预警     |
 | Mihomo Clash API / Dae          | 保持既有回归                                      | 必须通过           |
 
-native 协议源固定为 sing-box `v1.14.4` 的
+native 协议源固定为 sing-box `v1.14.4`（tag commit
+`c005f35300ce76427dc285481ec5695f5b179cd2`）的
 `daemon/started_service.proto`，Git blob SHA 为
 `2c27937b6c58e4fae1eb9cd2b231e45841be7838`。生成命令：
 
@@ -81,8 +82,9 @@ Release ZIP 并解压；手动更新时下载并校验 `SHA256SUMS`，准备新�
 ## 测试与限制
 
 单元/回归测试、Clash endpoint smoke、native gRPC-Web endpoint/stream 测试和
-真实 Chrome UI acceptance 必须分开记录。Chrome 调试端点不可用是失败或未执行，
-不是通过。下载失败回滚、PWA cache 更新、Android/Windows 实机和 native
+真实 Chrome UI acceptance 必须分开记录；`test/native-browser.mjs` 使用真实
+sing-box API，并与 mock-backed `test:verify` 分开。Chrome 调试端点不可用是失败或
+未执行，不是通过。下载失败回滚、PWA cache 更新、Android/Windows 实机和 native
 dashboard 自动升级仍未作为已验证能力声明。
 
 兼容性检查支持 `workflow_dispatch` 和计划运行：读取官方 stable release、下载

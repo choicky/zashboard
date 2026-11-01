@@ -6,6 +6,7 @@ import { showNotification } from '@/helper/notification'
 import { notifyRequestError } from '@/helper/request-error'
 import { i18n } from '@/i18n'
 import { independentLatencyTest, IPv6test, speedtestMode, speedtestTimeout } from '@/store/settings'
+import { activeBackend } from '@/store/setup'
 import pLimit from 'p-limit'
 import { fetchProxies } from './actions'
 import {
@@ -34,7 +35,7 @@ const testNodeLatency = (proxyName: string, url: string, timeout: number) => {
 const latencyTestForSingle = async (proxyName: string, url: string, timeout: number) => {
   const now = getNowProxyNodeName(proxyName)
 
-  if (IPv6test.value) {
+  if (IPv6test.value && activeBackend.value?.type !== 'singbox') {
     try {
       IPv6Map.value[now] = (await testNodeLatency(now, IPV6_TEST_URL, 2000)) > NOT_CONNECTED
     } catch {
@@ -169,7 +170,7 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
 
   const timeout = Math.max(5000, speedtestTimeout.value)
 
-  if (IPv6test.value) {
+  if (IPv6test.value && activeBackend.value?.type !== 'singbox') {
     try {
       const ipv6LatencyResult = await driver().proxies.testGroup(
         proxyGroupName,

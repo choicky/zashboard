@@ -1,3 +1,6 @@
+// Pinned from sing-box v1.14.4, tag commit
+// c005f35300ce76427dc285481ec5695f5b179cd2; source blob
+// 2c27937b6c58e4fae1eb9cd2b231e45841be7838.
 syntax = "proto3";
 
 package daemon;

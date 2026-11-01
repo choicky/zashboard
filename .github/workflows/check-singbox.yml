@@ -46,18 +46,56 @@ jobs:
           tar -xzf "$RUNNER_TEMP/sing-box-${VERSION#v}-linux-amd64.tar.gz" -C "$RUNNER_TEMP"
           mkdir -p "$RUNNER_TEMP/sb-ui-test"
           cat > "$RUNNER_TEMP/sb-ui-test/config.json" <<'JSON'
-          {"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"}],"services":[{"type":"api","listen":"127.0.0.1","listen_port":19092,"secret":"ci-native-secret","access_control_allow_origin":["http://127.0.0.1:19080"],"dashboard":{"enabled":false}}]}
+          {"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"},{"type":"selector","tag":"auto","outbounds":["direct"]}],"services":[{"type":"api","listen":"127.0.0.1","listen_port":19092,"secret":"ci-native-secret","access_control_allow_origin":["http://127.0.0.1:19080"],"dashboard":{"enabled":false}}]}
           JSON
           "$RUNNER_TEMP/sing-box-${VERSION#v}/sing-box" run -c "$RUNNER_TEMP/sb-ui-test/config.json" > "$RUNNER_TEMP/sb-ui-test/core.log" 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:19092/ >/dev/null 2>&1 && break; sleep 1; done
           SINGBOX_SECRET=ci-native-secret SINGBOX_EXPECTED_VERSION="${VERSION#v}" node test/singbox-native.mjs
+          SINGBOX_SECRET=ci-native-secret SINGBOX_API_PORT=19092 SINGBOX_UI_PORT=19080 node test/native-browser.mjs
 
   development:
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Inspect testing protocol without changing the pinned source
+        env:
+          PINNED_PROTO_SHA: 2c27937b6c58e4fae1eb9cd2b231e45841be7838
         run: |
           current=$(curl -fsSL https://api.github.com/repos/SagerNet/sing-box/contents/daemon/started_service.proto?ref=testing | jq -r .sha)
           echo "sing-box testing started_service.proto: $current"
-          echo 'This is an early warning only; it does not rewrite generated files or publish releases.'
+          echo "pinned v1.14.4 proto blob: $PINNED_PROTO_SHA"
+          if [ "$current" != "$PINNED_PROTO_SHA" ]; then
+            echo "::warning::sing-box testing protocol changed; native binary compatibility is not verified and generated files were not rewritten"
+          else
+            echo 'testing protocol matches the pinned source; no development binary is published by this check'
+          fi
+          release_json=$(curl -fsSL 'https://api.github.com/repos/SagerNet/sing-box/releases?per_page=30')
+          release=$(printf '%s' "$release_json" | jq -r '[.[] | select(.prerelease == true) | .tag_name][0] // empty')
+          if [ -z "$release" ]; then
+            echo '::warning::no official sing-box development binary release is available; binary check is unexecuted'
+            exit 0
+          fi
+          echo "development release candidate discovered: $release"
+          asset=$(printf '%s' "$release_json" | jq -r --arg tag "$release" '.[] | select(.tag_name == $tag) | .assets[] | select(.name | test("linux-amd64\\.tar\\.gz$")) | .browser_download_url' | head -n 1)
+          if [ -z "$asset" ]; then
+            echo '::warning::the development release has no official linux-amd64 archive; binary check is unexecuted'
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/sb-dev"
+          archive="$RUNNER_TEMP/sb-dev/sing-box.tar.gz"
+          curl -fsSL "$asset" -o "$archive"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/sb-dev"
+          binary=$(find "$RUNNER_TEMP/sb-dev" -type f -name sing-box -perm -u+x | head -n 1)
+          if [ -z "$binary" ]; then
+            echo '::warning::development archive did not contain an executable sing-box; binary check is unexecuted'
+            exit 0
+          fi
+          dev_version=$("$binary" version | awk 'NR==1 {print $3}')
+          cat > "$RUNNER_TEMP/sb-dev/config.json" <<'JSON'
+          {"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"},{"type":"selector","tag":"auto","outbounds":["direct"]}],"services":[{"type":"api","listen":"127.0.0.1","listen_port":19093,"secret":"ci-dev-secret","access_control_allow_origin":["http://127.0.0.1:19080"],"dashboard":{"enabled":false}}]}
+          JSON
+          "$binary" run -c "$RUNNER_TEMP/sb-dev/config.json" > "$RUNNER_TEMP/sb-dev/core.log" 2>&1 &
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:19093/ >/dev/null 2>&1 && break; sleep 1; done
+          if ! SINGBOX_SECRET=ci-dev-secret SINGBOX_API_URL=http://127.0.0.1:19093 SINGBOX_EXPECTED_VERSION="$dev_version" node test/singbox-native.mjs; then
+            echo '::warning::development binary native compatibility check failed; stable support remains unchanged'
+          fi

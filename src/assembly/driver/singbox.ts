@@ -1,4 +1,4 @@
-import { getSingboxClient, probeSingboxChannel } from '@/api/singbox/client'
+import { getSingboxClient, probeSingboxChannel, validateSingboxVersion } from '@/api/singbox/client'
 import { subscribeStream } from '@/api/singbox/subscriptions'
 import { proxyGroupList, proxyMap, proxyProviederList } from '@/assembly/proxies/state'
 import { LOG_LEVEL } from '@/constant'
@@ -14,7 +14,7 @@ import {
 } from '@/gen/daemon/started_service_pb'
 import { activeBackend } from '@/store/setup'
 import type { Backend, Config, Connection, Log, Proxy } from '@/types'
-import { shallowRef } from 'vue'
+import { shallowRef, watch } from 'vue'
 import type {
   ConnectionAccessor,
   ConnectionsPayload,
@@ -29,12 +29,13 @@ const unsupported = (name: string): never => {
 
 const toNumber = (value: bigint | number | undefined) => Number(value ?? 0)
 const handles = new Set<{ close: () => void }>()
+const proxyHandles = new Set<{ close: () => void }>()
 
-const track = <T extends { close: () => void }>(handle: T): T => {
-  handles.add(handle)
+const track = <T extends { close: () => void }>(handle: T, owner = handles): T => {
+  owner.add(handle)
   const close = handle.close
   handle.close = () => {
-    handles.delete(handle)
+    owner.delete(handle)
     close()
   }
   return handle
@@ -45,6 +46,8 @@ let groups = new Map<string, Groups['group'][number]>()
 let outbounds = new Map<string, OutboundList['outbounds'][number]>()
 let proxyReady: Promise<void> | undefined
 let resolveProxyReady: (() => void) | undefined
+let rejectProxyReady: ((reason: Error) => void) | undefined
+let proxyGeneration = 0
 
 const proxyFromItem = (item: OutboundList['outbounds'][number]): Proxy => ({
   name: item.tag,
@@ -102,38 +105,64 @@ const rebuildProxies = (): ProxiesPayload => {
 const startProxyStreams = (backend: Backend) => {
   const key = backend.uuid
   if (proxyKey === key && proxyReady) return
-  handles.forEach((handle) => handle.close())
+  rejectProxyReady?.(new Error('sing-box proxy subscription replaced'))
+  proxyHandles.forEach((handle) => handle.close())
+  proxyHandles.clear()
   groups = new Map()
   outbounds = new Map()
   proxyKey = key
-  proxyReady = new Promise((resolve) => (resolveProxyReady = resolve))
+  const generation = ++proxyGeneration
+  proxyReady = new Promise((resolve, reject) => {
+    resolveProxyReady = resolve
+    rejectProxyReady = reject
+  })
+  setTimeout(() => {
+    if (proxyGeneration !== generation || !resolveProxyReady) return
+    const error = new Error('sing-box proxy subscription did not become ready')
+    rejectProxyReady?.(error)
+    proxyHandles.forEach((handle) => handle.close())
+    proxyHandles.clear()
+    proxyKey = ''
+    proxyReady = undefined
+    resolveProxyReady = undefined
+    rejectProxyReady = undefined
+  }, 10000)
   track(
     subscribeStream<Groups>(
       'groups',
       (message) => {
-        if (activeBackend.value?.uuid !== key) return
+        if (proxyGeneration !== generation || activeBackend.value?.uuid !== key) return
         groups = new Map(message.group.map((group) => [group.tag, group]))
         rebuildProxies()
         resolveProxyReady?.()
         resolveProxyReady = undefined
+        rejectProxyReady = undefined
       },
       backend,
     ),
+    proxyHandles,
   )
   track(
     subscribeStream<OutboundList>(
       'outbounds',
       (message) => {
-        if (activeBackend.value?.uuid !== key) return
+        if (proxyGeneration !== generation || activeBackend.value?.uuid !== key) return
         outbounds = new Map(message.outbounds.map((outbound) => [outbound.tag, outbound]))
         rebuildProxies()
       },
       backend,
     ),
+    proxyHandles,
   )
 }
 
 const reset = () => {
+  proxyGeneration++
+  rejectProxyReady?.(new Error('sing-box proxy subscription cancelled'))
+  rejectProxyReady = undefined
+  resolveProxyReady = undefined
+  proxyHandles.forEach((handle) => handle.close())
+  proxyHandles.clear()
   handles.forEach((handle) => handle.close())
   handles.clear()
   proxyKey = ''
@@ -141,6 +170,51 @@ const reset = () => {
   resolveProxyReady = undefined
   groups = new Map()
   outbounds = new Map()
+}
+
+const waitForNativeLatency = (names: string[], timeout: number, backend: Backend) =>
+  new Promise<Record<string, number>>((resolve, reject) => {
+    const timer = setTimeout(
+      () => {
+        stop()
+        reject(new Error('sing-box URLTest result timeout'))
+      },
+      Math.max(1000, timeout) + 1000,
+    )
+    const stop = watch(
+      [proxyMap, activeBackend],
+      () => {
+        if (activeBackend.value?.uuid !== backend.uuid) {
+          clearTimeout(timer)
+          stop()
+          reject(new Error('sing-box URLTest session changed'))
+          return
+        }
+        const result = Object.fromEntries(
+          names
+            .map((name) => [name, proxyMap.value[name]?.history.at(-1)?.delay ?? 0] as const)
+            .filter(([, delay]) => delay > 0),
+        )
+        if (Object.keys(result).length === names.length) {
+          clearTimeout(timer)
+          stop()
+          resolve(result)
+        }
+      },
+      { deep: true },
+    )
+  })
+
+const runNativeURLTest = async (names: string[], timeout: number, requestTag = names[0]) => {
+  const backend = activeBackend.value
+  const client = getSingboxClient(backend)
+  if (!client || !backend || names.length === 0)
+    throw new Error('sing-box URLTest target unavailable')
+  const result = waitForNativeLatency(names, timeout, backend)
+  await client.client.uRLTest({ outboundTag: requestTag })
+  if (activeBackend.value?.uuid !== backend.uuid)
+    throw new Error('sing-box URLTest session changed')
+  return result
 }
 
 const splitHostPort = (value: string): [string, string] => {
@@ -273,7 +347,7 @@ export const singboxDriver: Driver = {
     fetchVersion: async () => {
       const client = getSingboxClient()
       if (!client) throw new Error('sing-box backend unavailable')
-      return (await client.client.getVersion({})).version
+      return validateSingboxVersion(await client.client.getVersion({})).version
     },
     upgradeCore: () => unsupported('core upgrade'),
     restartCore: () => unsupported('core restart'),
@@ -298,23 +372,26 @@ export const singboxDriver: Driver = {
       const backend = activeBackend.value
       if (!backend) return { proxies: {}, providers: [] }
       startProxyStreams(backend)
-      await proxyReady
+      const ready = proxyReady
+      if (!ready) throw new Error('sing-box proxy subscription unavailable')
+      await ready
       return rebuildProxies()
     },
     select: async (group, name) => {
-      const client = getSingboxClient()
+      const backend = activeBackend.value
+      const client = getSingboxClient(backend)
       if (!client) return
       await client.client.selectOutbound({ groupTag: group, outboundTag: name })
     },
     clearFixed: async () => unsupported('fixed proxy'),
-    testNode: async (name) => {
-      await getSingboxClient()?.client.uRLTest({ outboundTag: name })
-      return 0
+    testNode: async (name, _url, timeout) => {
+      const result = await runNativeURLTest([name], timeout)
+      return result[name]
     },
     testProviderNode: async () => unsupported('provider latency'),
-    testGroup: async (group) => {
-      await getSingboxClient()?.client.uRLTest({ outboundTag: group })
-      return {}
+    testGroup: async (group, _url, timeout) => {
+      const names = proxyMap.value[group]?.all ?? [group]
+      return runNativeURLTest(names, timeout, group)
     },
     updateProvider: async () => unsupported('provider update'),
     healthCheckProvider: async () => unsupported('provider health check'),
@@ -350,9 +427,11 @@ export const singboxDriver: Driver = {
       track(
         subscribeStream<PbLog>('logs', (message) =>
           onBatch(
-            message.messages
-              .filter((item) => !logLevel(level) || item.level <= logLevel(level)!)
-              .map((item) => ({ type: logType(item.level), payload: item.message })),
+            message.reset
+              ? []
+              : message.messages
+                  .filter((item) => !logLevel(level) || item.level <= logLevel(level)!)
+                  .map((item) => ({ type: logType(item.level), payload: item.message })),
           ),
         ),
       ),
