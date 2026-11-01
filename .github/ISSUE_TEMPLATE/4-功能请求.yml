@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        感谢您提出功能建议！在提交之前，请搜索[现有issues](https://github.com/Zephyruso/zashboard/issues)看看您的想法是否已经被提出过。
+        感谢您提出功能建议！在提交之前，请搜索[现有issues](https://github.com/choicky/zashboard/issues)看看您的想法是否已经被提出过。
 
   - type: textarea
     id: feature-description

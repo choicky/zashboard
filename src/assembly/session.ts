@@ -45,6 +45,12 @@ const initEvents = () => {
 }
 
 export const startBackendSession = async () => {
+  if (activeBackend.value?.type === 'singbox') {
+    // The activation guard normally prevents this state. Keep the session
+    // boundary fail-closed if a stale store or an external caller gets here.
+    return
+  }
+
   stopConnections()
   stopLogs()
   stopSatistic()

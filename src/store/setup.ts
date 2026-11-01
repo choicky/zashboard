@@ -4,24 +4,44 @@ import { isEqual, omit } from 'lodash'
 import { v4 as uuid } from 'uuid'
 import { computed, ref } from 'vue'
 import { sourceIPLabelList } from './settings'
+import { migrateBackendList } from './backend-migration'
+import {
+  canActivateBackend,
+  firstActivatableBackend,
+  nextActivatableBackend,
+} from './backend-activation'
+import { showNotification } from '@/helper/notification'
 
-type LegacyBackend = Omit<Partial<Backend>, 'type'> & { type?: string; singboxChannel?: unknown }
+type LegacyBackend = Omit<Partial<Backend>, 'type'> & {
+  type?: string
+  singboxChannel?: {
+    protocol?: string
+    host?: string
+    port?: string
+    secret?: string
+  }
+}
 
 const isLegacyBackend = (item: LegacyBackend) =>
   !item.type || 'singboxChannel' in item || item.type === 'singbox'
 
-const migrateBackendList = (list: LegacyBackend[]): Backend[] =>
-  list
-    .filter((item) => item.type !== 'singbox')
-    .map((item) => ({ ...(omit(item, 'singboxChannel') as Backend), type: 'clash' }))
-
 export const backendList = useStorage<Backend[]>('setup/api-list', [])
 
 if ((backendList.value as LegacyBackend[]).some(isLegacyBackend)) {
-  backendList.value = migrateBackendList(backendList.value as LegacyBackend[])
+  backendList.value = migrateBackendList(backendList.value as LegacyBackend[], uuid) as Backend[]
 }
 
 export const activeUuid = useStorage<string>('setup/active-uuid', '')
+
+// Do not reopen a preserved native entry as if it were a usable Clash session.
+// Leaving it unselected keeps the connection details available in the manager
+// while directing the user to an explicitly supported backend.
+if (
+  activeUuid.value &&
+  backendList.value.find((item) => item.uuid === activeUuid.value)?.type === 'singbox'
+) {
+  activeUuid.value = ''
+}
 
 if (activeUuid.value && !backendList.value.some((item) => item.uuid === activeUuid.value)) {
   activeUuid.value = ''
@@ -31,7 +51,20 @@ export const activeBackend = computed(() =>
 )
 
 export const setActiveBackend = (uuid: string) => {
+  if (!uuid) {
+    activeUuid.value = ''
+    return true
+  }
+
+  const backend = backendList.value.find((item) => item.uuid === uuid)
+
+  if (!canActivateBackend(backend)) {
+    showNotification({ content: 'singboxNativePending', type: 'alert-warning' })
+    return false
+  }
+
   activeUuid.value = uuid
+  return true
 }
 
 export type BackendManagerView =
@@ -48,15 +81,7 @@ export const closeBackendManager = () => {
 }
 
 export const switchActiveBackend = (direction: 1 | -1) => {
-  if (backendList.value.length < 2) {
-    return null
-  }
-
-  const currentIndex = backendList.value.findIndex((backend) => backend.uuid === activeUuid.value)
-  const startIndex = currentIndex >= 0 ? currentIndex : 0
-  const nextIndex = (startIndex + direction + backendList.value.length) % backendList.value.length
-
-  const nextBackend = backendList.value[nextIndex]
+  const nextBackend = nextActivatableBackend(backendList.value, activeUuid.value, direction)
 
   if (!nextBackend) {
     return null
@@ -102,7 +127,7 @@ export const removeBackend = (uuid: string) => {
   backendList.value = backendList.value.filter((end) => end.uuid !== uuid)
 
   if (wasActive) {
-    setActiveBackend(backendList.value[0]?.uuid ?? '')
+    setActiveBackend(firstActivatableBackend(backendList.value)?.uuid ?? '')
   }
 
   sourceIPLabelList.value.forEach((label) => {

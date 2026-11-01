@@ -1,4 +1,8 @@
-# 结束对 sing-box 的支持
+# 上游历史：结束对 sing-box 的支持
+
+本文保留上游在 3.23.0 的历史说明和原始归属。它不是
+choicky/zashboard 当前的支持政策；当前恢复范围、限制和验证结果见
+[sing-box 兼容性指南](./sing-box-compatibility.md)。
 
 zashboard 将在3.23.0版本移除对 sing-box 的支持，包括 sing-box 原生 gRPC API 以及
 sing-box 提供的 Clash API的兼容性支持。

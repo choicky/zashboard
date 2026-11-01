@@ -1,0 +1,52 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fast-forward main from upstream
+        id: compare
+        run: |
+          git remote add upstream https://github.com/Zephyruso/zashboard.git
+          git fetch origin custom
+          git fetch upstream main
+          if ! git merge-base --is-ancestor HEAD upstream/main; then
+            echo 'main has fork-only commits or has diverged; refusing overwrite' >&2
+            exit 1
+          fi
+          # Fast-forward the mirror whenever possible. If custom already
+          # contains upstream/main, this is a successful no-op for custom and
+          # must not create a duplicate synchronization PR.
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse upstream/main)" ]; then
+            git merge --ff-only upstream/main
+            git push origin HEAD:main
+          fi
+          if git merge-base --is-ancestor upstream/main origin/custom; then
+            echo 'custom already incorporates upstream/main; synchronization is complete'
+            echo 'needs_sync=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'needs_sync=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open one reusable custom synchronization PR
+        if: steps.compare.outputs.needs_sync == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/custom)" ]; then exit 0; fi
+          gh pr list --base custom --head main --state open --json number --jq 'length' | grep -qx 0 || exit 0
+          gh pr create --base custom --head main --title 'chore: sync upstream main' \
+            --body 'Automated upstream synchronization. Resolve conflicts deliberately; compatibility changes stay on custom.'

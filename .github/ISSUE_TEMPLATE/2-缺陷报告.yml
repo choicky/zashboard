@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        感谢您报告bug！在提交之前，请搜索[现有issues](https://github.com/Zephyruso/zashboard/issues)看看您的问题是否已经被报告过。
+        感谢您报告bug！在提交之前，请搜索[现有issues](https://github.com/choicky/zashboard/issues)看看您的问题是否已经被报告过。
 
         **如有可能，请尽量附上 bug 的录屏或截图**，这是我们理解并修复问题最快的方式。
 
@@ -15,7 +15,7 @@ body:
     id: zashboard-version
     attributes:
       label: zashboard版本
-      description: 您使用的zashboard版本（例如：1.81.0 或 gh-pages commit hash）
+      description: 您使用的zashboard版本（例如：sb-v3.30.0 或 Actions artifact）
       placeholder: '例如：1.81.0'
     validations:
       required: true

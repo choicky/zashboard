@@ -1,0 +1,47 @@
+name: Validate synchronization result
+
+on:
+  pull_request:
+    branches: [custom]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Existing PR number targeting custom'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve intended merge result
+        id: ref
+        env:
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          test -n "$PR_NUMBER"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "merge_ref=refs/pull/$PR_NUMBER/merge" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.merge_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.20.0
+      - name: Validate proposed merge result
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run type-check
+          pnpm run build
+          pnpm run test:compat
+      - name: Browser acceptance
+        run: pnpm test:verify

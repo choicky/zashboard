@@ -51,6 +51,12 @@
                 >
                   {{ element.host }}:{{ element.port }}
                 </span>
+                <span
+                  v-if="element.type === 'singbox'"
+                  class="text-warning w-full truncate text-xs"
+                >
+                  {{ $t('singboxNativePending') }}
+                </span>
               </span>
               <span
                 v-if="stateOf(element.uuid).status === 'online'"

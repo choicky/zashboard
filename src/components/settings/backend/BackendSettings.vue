@@ -246,7 +246,7 @@ const showDnsDiagnostics = computed(
 )
 const hasVisibleNetworkSettings = computed(
   () =>
-    can('configPatch') &&
+    can('networkConfig') &&
     !!configs.value &&
     (isVisiblePorts.value ||
       (!!configs.value.tun && canShowTunMode.value) ||

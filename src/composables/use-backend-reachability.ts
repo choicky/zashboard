@@ -4,7 +4,7 @@ import { getBackendProbeUrl } from '@/helper/utils'
 import type { Backend } from '@/types'
 import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
 
-export type ReachabilityStatus = 'idle' | 'checking' | 'online' | 'offline'
+export type ReachabilityStatus = 'idle' | 'checking' | 'online' | 'offline' | 'unsupported'
 
 const DEBOUNCE_DELAY = 400
 const PROBE_TIMEOUT = 8000
@@ -49,6 +49,13 @@ export const useBackendReachability = (form: Ref<ReachabilityTarget>) => {
   const run = async () => {
     const backend = target.value
     if (!backend) return
+
+    if (backend.type === 'singbox') {
+      status.value = 'unsupported'
+      latency.value = 0
+      message.value = 'sing-box native API support is pending'
+      return
+    }
 
     const current = ++generation
     controller = new AbortController()
