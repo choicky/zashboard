@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { runStream } from '../src/api/singbox/streams.ts'
 import { channelSpecificCapabilities } from '../src/assembly/channel-capabilities.ts'
+import { isFreshNativeLatency } from '../src/assembly/native-latency.ts'
 import { createSessionGate } from '../src/assembly/session-gate.ts'
 
 const gate = createSessionGate()
@@ -34,5 +35,14 @@ assert.deepEqual(channelSpecificCapabilities('singbox'), {
   customTestUrl: false,
   nodeLatencyTest: false,
 })
+assert.equal(
+  isFreshNativeLatency(120, '2026-11-01T00:00:01.000Z', Date.parse('2026-11-01T00:00:00.000Z')),
+  true,
+)
+assert.equal(
+  isFreshNativeLatency(120, '2026-11-01T00:00:00.000Z', Date.parse('2026-11-01T00:00:00.000Z')),
+  false,
+)
+assert.equal(isFreshNativeLatency(0, '2026-11-01T00:00:01.000Z', 0), false)
 
 console.log('native session, stream cancellation, and channel capability regressions passed')

@@ -15,6 +15,7 @@ import {
 import { activeBackend } from '@/store/setup'
 import type { Backend, Config, Connection, Log, Proxy } from '@/types'
 import { shallowRef, watch } from 'vue'
+import { isFreshNativeLatency } from '../native-latency'
 import type {
   ConnectionAccessor,
   ConnectionsPayload,
@@ -172,8 +173,15 @@ const reset = () => {
   outbounds = new Map()
 }
 
-const waitForNativeLatency = (names: string[], timeout: number, backend: Backend) =>
-  new Promise<Record<string, number>>((resolve, reject) => {
+const waitForNativeLatency = (names: string[], timeout: number, backend: Backend) => {
+  const initialTimes = new Map(
+    names.map((name) => {
+      const time = proxyMap.value[name]?.history.at(-1)?.time
+      return [name, time ? Date.parse(time) : 0]
+    }),
+  )
+
+  return new Promise<Record<string, number>>((resolve, reject) => {
     const timer = setTimeout(
       () => {
         stop()
@@ -192,7 +200,16 @@ const waitForNativeLatency = (names: string[], timeout: number, backend: Backend
         }
         const result = Object.fromEntries(
           names
-            .map((name) => [name, proxyMap.value[name]?.history.at(-1)?.delay ?? 0] as const)
+            .map((name) => {
+              const sample = proxyMap.value[name]?.history.at(-1)
+              return [
+                name,
+                sample &&
+                isFreshNativeLatency(sample.delay, sample.time, initialTimes.get(name) ?? 0)
+                  ? sample.delay
+                  : 0,
+              ] as const
+            })
             .filter(([, delay]) => delay > 0),
         )
         if (Object.keys(result).length === names.length) {
@@ -204,6 +221,7 @@ const waitForNativeLatency = (names: string[], timeout: number, backend: Backend
       { deep: true },
     )
   })
+}
 
 const runNativeURLTest = async (names: string[], timeout: number, requestTag = names[0]) => {
   const backend = activeBackend.value
@@ -425,15 +443,16 @@ export const singboxDriver: Driver = {
   logs: {
     subscribe: (level, onBatch) =>
       track(
-        subscribeStream<PbLog>('logs', (message) =>
-          onBatch(
-            message.reset
-              ? []
-              : message.messages
-                  .filter((item) => !logLevel(level) || item.level <= logLevel(level)!)
-                  .map((item) => ({ type: logType(item.level), payload: item.message })),
-          ),
-        ),
+        subscribeStream<PbLog>('logs', (message) => {
+          if (message.reset) {
+            onBatch([])
+            return
+          }
+          const batch = message.messages
+            .filter((item) => !logLevel(level) || item.level <= logLevel(level)!)
+            .map((item) => ({ type: logType(item.level), payload: item.message }))
+          if (batch.length) onBatch(batch)
+        }),
       ),
   },
   connections: {
