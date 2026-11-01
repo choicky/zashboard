@@ -45,3 +45,40 @@ jobs:
           pnpm run test:compat
       - name: Browser acceptance
         run: pnpm test:verify
+
+  native-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR merge ref
+        id: ref
+        env:
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: echo "merge_ref=refs/pull/$PR_NUMBER/merge" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.merge_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.20.0
+      - name: Build and run native sing-box acceptance
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          mkdir -p "$RUNNER_TEMP/sing-box"
+          curl -fsSL https://github.com/SagerNet/sing-box/releases/download/v1.14.4/sing-box-1.14.4-linux-amd64.tar.gz -o "$RUNNER_TEMP/sing-box/sing-box.tar.gz"
+          tar -xzf "$RUNNER_TEMP/sing-box/sing-box.tar.gz" -C "$RUNNER_TEMP/sing-box"
+          cat > "$RUNNER_TEMP/sing-box/config.json" <<'JSON'
+          {"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"},{"type":"selector","tag":"auto","outbounds":["direct"]}],"services":[{"type":"api","listen":"127.0.0.1","listen_port":19092,"secret":"ci-native-secret","access_control_allow_origin":["http://127.0.0.1:19080"],"dashboard":{"enabled":false}}]}
+          JSON
+          "$RUNNER_TEMP/sing-box/sing-box-1.14.4-linux-amd64/sing-box" run -c "$RUNNER_TEMP/sing-box/config.json" > "$RUNNER_TEMP/sing-box/core.log" 2>&1 &
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:19092/ || true)
+            if [ "$code" != 000 ]; then break; fi
+            sleep 1
+          done
+          SINGBOX_SECRET=ci-native-secret SINGBOX_EXPECTED_VERSION=1.14.4 node test/singbox-native.mjs
+          SINGBOX_SECRET=ci-native-secret SINGBOX_API_PORT=19092 SINGBOX_UI_PORT=19080 node test/native-browser.mjs
