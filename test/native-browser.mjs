@@ -120,8 +120,8 @@ try {
     const control = document.querySelector('[data-native-mode-control="true"]')
     if (!control) return 'unavailable'
     control.click()
-    const option = [...document.querySelectorAll('[role="option"],option,button')].find((el) =>
-      /^direct$/i.test(el.textContent?.trim() || '')
+    const option = [...document.querySelectorAll('[role="option"]')].find((el) =>
+      el.getAttribute('aria-disabled') !== 'true' && el.textContent?.trim()
     )
     option?.click()
     return Boolean(option)
