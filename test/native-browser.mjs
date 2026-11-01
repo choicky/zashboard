@@ -120,12 +120,19 @@ try {
     const control = document.querySelector('[data-native-mode-control="true"]')
     if (!control) return 'unavailable'
     control.click()
-    const option = [...document.querySelectorAll('[role="option"]')].find((el) =>
-      el.getAttribute('aria-disabled') !== 'true' && el.textContent?.trim()
-    )
-    option?.click()
-    return Boolean(option)
+    return true
   })()`)
+  if (modeControl === true) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const selectedMode = await page.evaluate(`(() => {
+      const option = [...document.querySelectorAll('[role="option"]')].find((el) =>
+        el.getAttribute('aria-disabled') !== 'true' && el.textContent?.trim()
+      )
+      option?.click()
+      return Boolean(option)
+    })()`)
+    assert.equal(selectedMode, true, 'native mode control did not expose a valid option')
+  }
   if (modeControl === 'unavailable') {
     console.log('native mode UI unavailable: the real core returned an empty mode list')
   } else {
