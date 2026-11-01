@@ -52,6 +52,10 @@ try {
     )})
     localStorage.setItem('setup/active-uuid', 'native')
   `)
+  // The store is initialized before this script writes the isolated backend
+  // list. Reload once to make those saved records the application's state;
+  // all backend switching assertions below remain without a full-page reload.
+  await page.reload()
 
   const open = async (route) => {
     await page.goto(`${app.url}/#/${route}`)
