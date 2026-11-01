@@ -21,7 +21,7 @@ import { iconReflectList } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Backend, Config, Connection, Log, Proxy } from '@/types'
 import { shallowRef, watch } from 'vue'
-import { isFreshNativeLatency } from '../native-latency'
+import { coordinateNativeTest, isFreshNativeLatency } from '../native-latency'
 import type {
   ConnectionAccessor,
   ConnectionsPayload,
@@ -245,15 +245,23 @@ const runNativeURLTest = async (names: string[], timeout: number, requestTag = n
   if (!client || !backend || names.length === 0)
     throw new Error('sing-box URLTest target unavailable')
   const waiter = waitForNativeLatency(names, timeout, backend)
+  const controller = new AbortController()
+  const rpc = client.client.uRLTest({ outboundTag: requestTag }, { signal: controller.signal })
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, timeout) + 1000)
   try {
-    await client.client.uRLTest({ outboundTag: requestTag })
+    const result = await coordinateNativeTest({
+      rpc,
+      waiter: waiter.promise,
+      abort: () => {
+        controller.abort()
+        waiter.cancel(new Error('sing-box URLTest cancelled'))
+      },
+    })
     if (activeBackend.value?.uuid !== backend.uuid)
       throw new Error('sing-box URLTest session changed')
-    return await waiter.promise
-  } catch (error) {
-    waiter.cancel(error instanceof Error ? error : new Error(String(error)))
-    await waiter.promise.catch(() => {})
-    throw error
+    return result
+  } finally {
+    clearTimeout(timer)
   }
 }
 

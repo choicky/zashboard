@@ -73,6 +73,43 @@ try {
   `)
   assert.equal(nativeIdentity, true, 'native core identity/version was not visible')
 
+  const navigationCount = await page.evaluate('performance.getEntriesByType("navigation").length')
+  const selectNativeNode = await page.evaluate(`(() => {
+    const node = [...document.querySelectorAll('*')].find((el) =>
+      el.textContent?.trim() === 'direct' && el.closest('[data-group-name]')
+    )
+    if (!node) return false
+    node.click()
+    return true
+  })()`)
+  assert.equal(selectNativeNode, true, 'native node selection control was not found')
+  await new Promise((resolve) => setTimeout(resolve, 500))
+
+  const latencyControl = await page.evaluate(`(() => {
+    const node = [...document.querySelectorAll('*')].find((el) =>
+      el.textContent?.trim() === 'direct' && el.closest('[data-group-name]')
+    )
+    if (!node) return false
+    node.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
+    return true
+  })()`)
+  assert.equal(latencyControl, true, 'native latency test target was not found')
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+
+  const modeControl = await page.evaluate(`(() => {
+    const control = [...document.querySelectorAll('select,[role="combobox"],button')].find((el) =>
+      /rule|direct|global/i.test(el.textContent || '')
+    )
+    if (!control) return false
+    control.click()
+    const option = [...document.querySelectorAll('[role="option"],option,button')].find((el) =>
+      /^direct$/i.test(el.textContent?.trim() || '')
+    )
+    option?.click()
+    return Boolean(option)
+  })()`)
+  assert.equal(modeControl, true, 'native mode control was not found')
+
   const logs = await open('logs')
   assert.doesNotMatch(logs, /dashboard upgrade|更新面板/i)
   await open('connections')
@@ -87,14 +124,41 @@ try {
     null,
   )
 
-  // Switch to the Phase 1 Clash channel through the persisted backend selector.
-  await page.evaluate("localStorage.setItem('setup/active-uuid', 'clash')")
-  await page.reload()
+  // Switch to the Phase 1 Clash channel through the visible backend selector,
+  // without a full-page reload. This also exercises native stream disposal.
+  await page.evaluate(`(() => {
+    const trigger = [...document.querySelectorAll('button')].find((el) =>
+      /native-sing-box/.test(el.textContent || '')
+    )
+    if (!trigger) throw new Error('backend switch trigger not found')
+    trigger.click()
+  })()`)
+  await waitFor(() => page.evaluate(`document.body.innerText.includes('clash-regression')`), {
+    timeout: 10000,
+  })
+  await page.evaluate(`(() => {
+    const target = [...document.querySelectorAll('button')].find((el) =>
+      el.textContent?.trim() === 'clash-regression'
+    )
+    if (!target) throw new Error('Clash backend option not found')
+    target.click()
+  })()`)
   assert.notEqual(
-    await waitFor(() => page.evaluate(`document.body.innerText.match(/Group-|Node-/i) !== null`), {
-      timeout: 30000,
-    }),
+    await waitFor(
+      () =>
+        page.evaluate(
+          `localStorage.getItem('setup/active-uuid') === 'clash' && document.body.innerText.match(/Group-|Node-/i) !== null`,
+        ),
+      {
+        timeout: 30000,
+      },
+    ),
     null,
+  )
+  assert.equal(
+    await page.evaluate('performance.getEntriesByType("navigation").length'),
+    navigationCount,
+    'backend switching unexpectedly performed a full-page reload',
   )
 
   console.log(

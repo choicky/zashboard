@@ -66,7 +66,13 @@ export const startBackendSession = async () => {
     return
   }
 
-  await probeActiveBackend().catch(() => {})
+  try {
+    await probeActiveBackend()
+  } catch {
+    // backendProbe contains the user-visible error. Keep the selected backend
+    // and stop at the session boundary; never initialize against an unverified core.
+    return
+  }
 
   if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
     return

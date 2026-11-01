@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { runStream } from '../src/api/singbox/streams.ts'
 import { channelSpecificCapabilities } from '../src/assembly/channel-capabilities.ts'
-import { isFreshNativeLatency } from '../src/assembly/native-latency.ts'
+import { coordinateNativeTest, isFreshNativeLatency } from '../src/assembly/native-latency.ts'
 import { createSessionGate } from '../src/assembly/session-gate.ts'
 
 const gate = createSessionGate()
@@ -44,5 +44,29 @@ assert.equal(
   false,
 )
 assert.equal(isFreshNativeLatency(0, '2026-11-01T00:00:01.000Z', 0), false)
+
+let rejectedAbort = 0
+const rejectedWaiter = Promise.reject(new Error('waiter failed'))
+await assert.rejects(
+  coordinateNativeTest({
+    rpc: new Promise(() => {}),
+    waiter: rejectedWaiter,
+    abort: () => rejectedAbort++,
+  }),
+  /waiter failed/,
+)
+assert.equal(rejectedAbort, 1)
+
+let rpcAbort = 0
+const rpcFailure = Promise.reject(new Error('rpc failed'))
+await assert.rejects(
+  coordinateNativeTest({
+    rpc: rpcFailure,
+    waiter: new Promise(() => {}),
+    abort: () => rpcAbort++,
+  }),
+  /rpc failed/,
+)
+assert.equal(rpcAbort, 1)
 
 console.log('native session, stream cancellation, and channel capability regressions passed')

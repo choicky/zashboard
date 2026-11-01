@@ -151,7 +151,7 @@ export const probeActiveBackend = () => {
     ? { uuid: backend.uuid, status: 'probing', latency: 0, message: '' }
     : undefined
 
-  probe = backend ? probeBackendVersion(backend).catch(() => {}) : Promise.resolve()
+  probe = backend ? probeBackendVersion(backend) : Promise.resolve()
   return probe
 }
 
@@ -167,7 +167,11 @@ const fetchIsCoreUpdateAvailable = async () => {
 
 const checkUIUpdateForGeneration = async (checkGeneration: number) => {
   const backendUuid = activeBackend.value?.uuid
-  await coreReady()
+  try {
+    await coreReady()
+  } catch {
+    return
+  }
 
   // A check started for an old backend must never act on the newly selected
   // backend after probing or fetching GitHub releases completes.
