@@ -29,6 +29,7 @@ import {
   twoColumnProxyGroup,
   useSmartGroupSort,
 } from '@/store/settings'
+import { activeBackend } from '@/store/setup'
 import {
   ArrowPathIcon,
   BoltIcon,
@@ -164,19 +165,22 @@ export default defineComponent({
             <ArrowPathIcon class={['h-4 w-4', isUpgrading.value && 'animate-spin']} />
           </button>
         )
-      const modeSelect = configs.value && can('configPatch') && (
-        <SelectInput
-          data-native-mode-control="true"
-          class={['select select-sm', isLargeCtrlsBar.value ? 'min-w-40' : 'min-w-24']}
-          modelValue={configs.value.mode}
-          onUpdate:modelValue={(value) => (configs.value!.mode = value as string)}
-          onChange={(value) => handlerModeChange(value as string)}
-          options={modeList.value.map((value) => ({
-            value,
-            label: needTranslateModes.value ? t(value.toLowerCase()) : value,
-          }))}
-        />
-      )
+      // Native mode is a verified channel capability after the session probe;
+      // keep the control available even while core branding is still settling.
+      const modeSelect = configs.value &&
+        (can('configPatch') || activeBackend.value?.type === 'singbox') && (
+          <SelectInput
+            data-native-mode-control="true"
+            class={['select select-sm', isLargeCtrlsBar.value ? 'min-w-40' : 'min-w-24']}
+            modelValue={configs.value.mode}
+            onUpdate:modelValue={(value) => (configs.value!.mode = value as string)}
+            onChange={(value) => handlerModeChange(value as string)}
+            options={modeList.value.map((value) => ({
+              value,
+              label: needTranslateModes.value ? t(value.toLowerCase()) : value,
+            }))}
+          />
+        )
       const sort = (
         <SelectInput
           class={['select select-sm']}
