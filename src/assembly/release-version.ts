@@ -65,4 +65,3 @@ export const hasNewerStableRelease = (releases: ForkRelease[], installed: string
   const latest = latestStableRelease(releases)
   return latest ? isReleaseNewer(latest.tag_name, installed) : false
 }
-
