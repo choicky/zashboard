@@ -71,10 +71,9 @@ export const startBackendSession = async () => {
     if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
       return
 
-    await Promise.allSettled([fetchConfigs(), fetchProxies(), fetchRules()])
-
-    if (!sessionGate.isCurrent(generation) || activeBackend.value?.uuid !== selectedBackend.uuid)
-      return
+    fetchConfigs().catch(() => {})
+    fetchProxies().catch(() => {})
+    fetchRules().catch(() => {})
 
     initConnections()
     initLogs()

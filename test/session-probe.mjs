@@ -22,6 +22,19 @@ assert.equal(
 )
 assert.equal(initialized, true)
 
+let liveSubscriptionsStarted = false
+let releasePendingResource
+const pendingResource = new Promise((resolve) => (releasePendingResource = resolve))
+await runSessionAfterProbe(
+  async () => {},
+  async () => {
+    pendingResource.catch(() => {})
+    liveSubscriptionsStarted = true
+  },
+)
+assert.equal(liveSubscriptionsStarted, true)
+releasePendingResource()
+
 let initializedAfterOptionalFailure = false
 let optionalFailureObserved = false
 let optionalFailureSettled
