@@ -5,6 +5,7 @@ import {
   coordinateNativeTest,
   freshNativeLatencyResults,
   isFreshNativeLatency,
+  isNativeDirectOutbound,
 } from '../src/assembly/native-latency.ts'
 import { createSessionGate } from '../src/assembly/session-gate.ts'
 
@@ -48,6 +49,11 @@ assert.equal(
   false,
 )
 assert.equal(isFreshNativeLatency(0, '2026-11-01T00:00:01.000Z', 0), false)
+assert.equal(
+  isNativeDirectOutbound({ outboundType: 'direct', outbound: 'custom-direct-tag' }),
+  true,
+)
+assert.equal(isNativeDirectOutbound({ outboundType: 'http', outbound: 'direct' }), false)
 assert.deepEqual(
   freshNativeLatencyResults(
     ['reachable', 'unreachable'],

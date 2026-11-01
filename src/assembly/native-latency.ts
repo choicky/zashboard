@@ -1,6 +1,9 @@
 export const isFreshNativeLatency = (delay: number, time: string, initialTime: number) =>
   delay > 0 && Date.parse(time) > initialTime
 
+export const isNativeDirectOutbound = (connection: { outboundType: string; outbound: string }) =>
+  connection.outboundType === 'direct'
+
 export const freshNativeLatencyResults = (
   names: string[],
   samples: Record<string, { delay: number; time: string } | undefined>,

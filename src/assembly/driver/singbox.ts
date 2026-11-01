@@ -21,7 +21,11 @@ import { iconReflectList } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Backend, Config, Connection, Log, Proxy } from '@/types'
 import { shallowRef, watch } from 'vue'
-import { coordinateNativeTest, freshNativeLatencyResults } from '../native-latency'
+import {
+  coordinateNativeTest,
+  freshNativeLatencyResults,
+  isNativeDirectOutbound,
+} from '../native-latency'
 import type {
   ConnectionAccessor,
   ConnectionsPayload,
@@ -302,6 +306,8 @@ type NativeConnection = {
   rule: string
   rulePayload: string
   metadata: Record<string, string>
+  outboundType: string
+  outbound: string
 }
 
 const asNative = (connection: Connection) => connection as unknown as NativeConnection
@@ -317,6 +323,8 @@ const nativeConnection = (value: PbConnection): NativeConnection => ({
   rule: value.rule,
   rulePayload: '',
   start: toNumber(value.createdAt),
+  outboundType: value.outboundType,
+  outbound: value.outbound,
   metadata: {
     destinationIP: splitHostPort(value.destination)[0],
     destinationPort: splitHostPort(value.destination)[1],
@@ -358,7 +366,10 @@ const accessor: ConnectionAccessor = {
     asNative(connection).metadata.inboundUser || asNative(connection).metadata.inboundName || '-',
   sniffHost: (connection) => asNative(connection).metadata.sniffHost,
   remoteAddress: (connection) => asNative(connection).metadata.remoteDestination,
-  isDirect: () => false,
+  isDirect: (connection) => {
+    const native = asNative(connection)
+    return isNativeDirectOutbound(native)
+  },
   smartBlock: () => undefined,
 }
 
