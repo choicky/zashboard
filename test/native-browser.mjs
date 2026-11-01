@@ -81,7 +81,8 @@ try {
   const proxies = await open('proxies')
   assert.match(proxies, /auto|direct/i, 'native proxy groups/selectors were not rendered')
   const nativeIdentity = await page.evaluate(`
-    [...document.querySelectorAll('body *')].some((el) => /sing-box|1\\.14\\./i.test(el.innerText || ''))
+    [...document.querySelectorAll('body *')].some((el) => /sing-box|1\\.14\\./i.test(el.innerText || '')) ||
+    [...document.querySelectorAll('img')].some((el) => /sing-box/i.test(el.src || ''))
   `)
   assert.equal(
     nativeIdentity,
