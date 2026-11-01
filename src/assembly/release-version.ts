@@ -56,10 +56,18 @@ export const isReleaseNewer = (candidate: string, installed: string) =>
   compareReleaseTags(candidate, installed) === 1
 
 export const latestStableRelease = (releases: ForkRelease[]) =>
-  releases.find(
-    (release) =>
-      !release.draft && !release.prerelease && /^sb-v\d+\.\d+\.\d+$/.test(release.tag_name),
-  )
+  releases
+    .filter(
+      (release) =>
+        !release.draft && !release.prerelease && /^sb-v\d+\.\d+\.\d+$/.test(release.tag_name),
+    )
+    .reduce<ForkRelease | undefined>(
+      (latest, release) =>
+        !latest || compareReleaseTags(release.tag_name, latest.tag_name) === 1
+          ? release
+          : latest,
+      undefined,
+    )
 
 export const hasNewerStableRelease = (releases: ForkRelease[], installed: string) => {
   const latest = latestStableRelease(releases)

@@ -25,9 +25,11 @@ assert.equal(
 assert.equal(
   latestStableRelease([
     { tag_name: 'sb-v3.30.0-rc3', prerelease: true, draft: false },
-    { tag_name: 'sb-v3.30.0', prerelease: false, draft: false },
+    { tag_name: 'sb-v3.30.1', prerelease: false, draft: false },
+    { tag_name: 'sb-v3.32.0', prerelease: false, draft: false },
+    { tag_name: 'sb-v3.31.0', prerelease: false, draft: false },
   ])?.tag_name,
-  'sb-v3.30.0',
+  'sb-v3.32.0',
 )
 
 console.log('release version ordering: scenarios passed')
