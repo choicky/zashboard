@@ -367,10 +367,17 @@ export const singboxDriver: Driver = {
           const closed: NativeConnection[] = []
           if (message.reset) active.clear()
           for (const event of message.events) {
+            const previous = active.get(event.id)
             const connection = event.connection
               ? nativeConnection(event.connection)
-              : active.get(event.id)
+              : previous
+                ? { ...previous, metadata: { ...previous.metadata } }
+                : undefined
             if (!connection) continue
+            if (!event.connection && previous) {
+              connection.download += toNumber(event.downlinkDelta)
+              connection.upload += toNumber(event.uplinkDelta)
+            }
             connection.downloadSpeed = toNumber(event.downlinkDelta)
             connection.uploadSpeed = toNumber(event.uplinkDelta)
             if (
