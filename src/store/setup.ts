@@ -5,7 +5,11 @@ import { v4 as uuid } from 'uuid'
 import { computed, ref } from 'vue'
 import { sourceIPLabelList } from './settings'
 import { migrateBackendList } from './backend-migration'
-import { canActivateBackend, nextActivatableBackend } from './backend-activation'
+import {
+  canActivateBackend,
+  firstActivatableBackend,
+  nextActivatableBackend,
+} from './backend-activation'
 import { showNotification } from '@/helper/notification'
 
 type LegacyBackend = Omit<Partial<Backend>, 'type'> & {
@@ -123,7 +127,7 @@ export const removeBackend = (uuid: string) => {
   backendList.value = backendList.value.filter((end) => end.uuid !== uuid)
 
   if (wasActive) {
-    setActiveBackend(backendList.value[0]?.uuid ?? '')
+    setActiveBackend(firstActivatableBackend(backendList.value)?.uuid ?? '')
   }
 
   sourceIPLabelList.value.forEach((label) => {

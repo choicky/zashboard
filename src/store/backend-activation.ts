@@ -15,3 +15,5 @@ export const nextActivatableBackend = (
   const startIndex = currentIndex >= 0 ? currentIndex : 0
   return candidates[(startIndex + direction + candidates.length) % candidates.length]
 }
+
+export const firstActivatableBackend = (backends: Backend[]) => backends.find(canActivateBackend)

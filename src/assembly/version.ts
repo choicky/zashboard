@@ -20,6 +20,8 @@ export const isUIUpdateAvailable = ref(false)
 export const zashboardVersion = ref(__APP_VERSION__)
 export const zashboardReleaseTag = ref(__BUILD_RELEASE_TAG__)
 let backendGeneration = 0
+let uiUpdateCheckGeneration = -1
+let uiUpdateCheckPromise: Promise<void> | undefined
 
 watch(activeBackend, () => {
   backendGeneration++
@@ -116,9 +118,10 @@ const probeBackendVersion = async (backend: Backend) => {
     message: '',
   }
 
-  // HomePage may have checked before /version completed. Re-run now that the
-  // core identity and capability table are authoritative for this backend.
-  void checkUIUpdate()
+  // HomePage may have checked before /version completed. Re-run after this
+  // probe returns so core identity and capabilities are authoritative without
+  // recursively awaiting the probe that is still in flight.
+  setTimeout(() => void checkUIUpdate(), 0)
 
   if (!can('coreUpdateCheck') || !checkUpgradeCore.value || backend.disableUpgradeCore) return
 
@@ -161,9 +164,8 @@ const fetchIsCoreUpdateAvailable = async () => {
   return !assets.some(({ name }) => name.includes(versionNumber))
 }
 
-export const checkUIUpdate = async () => {
+const checkUIUpdateForGeneration = async (checkGeneration: number) => {
   const backendUuid = activeBackend.value?.uuid
-  const checkGeneration = backendGeneration
   await coreReady()
 
   // A check started for an old backend must never act on the newly selected
@@ -171,9 +173,12 @@ export const checkUIUpdate = async () => {
   if (
     !backendUuid ||
     backendGeneration !== checkGeneration ||
-    activeBackend.value?.uuid !== backendUuid ||
-    core.value === Core.Unknown
+    activeBackend.value?.uuid !== backendUuid
   ) {
+    return
+  }
+
+  if (core.value === Core.Unknown) {
     isUIUpdateAvailable.value = false
     return
   }
@@ -192,20 +197,35 @@ export const checkUIUpdate = async () => {
     )
   } catch {
     // A fork with only prereleases has no stable "latest" release yet.
-    isUIUpdateAvailable.value = false
+    if (backendGeneration === checkGeneration && activeBackend.value?.uuid === backendUuid) {
+      isUIUpdateAvailable.value = false
+    }
     return
   }
 
   // Compare the complete fork tag. In particular, a prerelease must not be
   // compared to v3.30.0 or repeatedly trigger an automatic update.
-  isUIUpdateAvailable.value = hasNewerStableRelease(releases, zashboardReleaseTag.value)
-
   if (backendGeneration !== checkGeneration || activeBackend.value?.uuid !== backendUuid) {
-    isUIUpdateAvailable.value = false
     return
   }
+
+  isUIUpdateAvailable.value = hasNewerStableRelease(releases, zashboardReleaseTag.value)
 
   if (isUIUpdateAvailable.value && autoUpgradeDashboard.value) {
     upgradeUI().catch(() => {})
   }
+}
+
+export const checkUIUpdate = () => {
+  const generation = backendGeneration
+  if (uiUpdateCheckPromise && uiUpdateCheckGeneration === generation) {
+    return uiUpdateCheckPromise
+  }
+
+  uiUpdateCheckGeneration = generation
+  const promise = checkUIUpdateForGeneration(generation).finally(() => {
+    if (uiUpdateCheckPromise === promise) uiUpdateCheckPromise = undefined
+  })
+  uiUpdateCheckPromise = promise
+  return promise
 }

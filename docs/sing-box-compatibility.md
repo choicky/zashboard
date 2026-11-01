@@ -41,7 +41,7 @@ provider 操作。
     "clash_api": {
       "external_controller": "127.0.0.1:9090",
       "external_ui": "zashboard",
-      "external_ui_download_url": "https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc6/zashboard-singbox-full.zip",
+      "external_ui_download_url": "https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-rc7/zashboard-singbox-full.zip",
       "external_ui_download_detour": "direct",
       "secret": "REPLACE_WITH_LOCAL_SECRET",
       "access_control_allow_origin": ["http://127.0.0.1"],

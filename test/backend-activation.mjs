@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
-import { canActivateBackend, nextActivatableBackend } from '../src/store/backend-activation.ts'
+import {
+  canActivateBackend,
+  firstActivatableBackend,
+  nextActivatableBackend,
+} from '../src/store/backend-activation.ts'
 
 const backend = {
   uuid: 'backend',
@@ -22,5 +26,6 @@ const dae = { ...backend, uuid: 'dae', type: 'dae' }
 assert.equal(nextActivatableBackend([clashA, native, dae], clashA.uuid, 1)?.uuid, dae.uuid)
 assert.equal(nextActivatableBackend([clashA, native, dae], dae.uuid, -1)?.uuid, clashA.uuid)
 assert.equal(nextActivatableBackend([clashA, native], clashA.uuid, 1), undefined)
+assert.equal(firstActivatableBackend([native, dae])?.uuid, dae.uuid)
 
 console.log('backend activation guard: supported and native scenarios passed')
