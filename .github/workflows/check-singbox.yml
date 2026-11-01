@@ -57,6 +57,7 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
       - name: Inspect testing protocol without changing the pinned source
         env:
           PINNED_PROTO_SHA: 2c27937b6c58e4fae1eb9cd2b231e45841be7838

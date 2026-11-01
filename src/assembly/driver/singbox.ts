@@ -17,6 +17,7 @@ import {
   type Log as PbLog,
   type Status,
 } from '@/gen/daemon/started_service_pb'
+import { iconReflectList } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Backend, Config, Connection, Log, Proxy } from '@/types'
 import { shallowRef, watch } from 'vue'
@@ -98,6 +99,10 @@ const rebuildProxies = (): ProxiesPayload => {
         ]
       }
     }
+  }
+  for (const proxy of Object.values(proxies)) {
+    const icon = iconReflectList.value.find((item) => item.name === proxy.name)
+    if (icon) proxy.icon = icon.icon
   }
   const payload = { proxies, providers: [] }
   proxyMap.value = proxies
