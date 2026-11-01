@@ -56,6 +56,7 @@
             <button
               v-for="backend in backendList"
               :key="backend.uuid"
+              :data-backend-uuid="backend.uuid"
               class="flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors"
               :class="backend.uuid === activeUuid ? 'bg-primary/10' : 'hover:bg-base-200'"
               @click="switchTo(backend.uuid)"

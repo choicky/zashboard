@@ -180,9 +180,7 @@ try {
     },
   )
   await page.evaluate(`(() => {
-    const target = [...document.querySelectorAll('button')].find((el) =>
-      el.textContent?.trim() === 'clash-regression'
-    )
+    const target = document.querySelector('[data-backend-uuid="clash"]')
     if (!target) throw new Error('Clash backend option not found')
     target.click()
   })()`)
