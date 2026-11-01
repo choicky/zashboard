@@ -38,6 +38,7 @@ export type BackendProbe = {
 export const backendProbe = ref<BackendProbe | undefined>()
 
 const detectCore = (versionString: string): Core => {
+  if (activeBackend.value?.type === 'singbox') return Core.SingBox
   if (/\bsing-box\b/i.test(versionString)) return Core.SingBox
   if (/\bhonk\b/i.test(versionString)) return Core.Honk
   if (activeBackend.value?.type === 'dae') return Core.Dae

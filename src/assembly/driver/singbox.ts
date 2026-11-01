@@ -1,5 +1,6 @@
 import { getSingboxClient, probeSingboxChannel } from '@/api/singbox/client'
 import { subscribeStream } from '@/api/singbox/subscriptions'
+import { proxyGroupList, proxyMap, proxyProviederList } from '@/assembly/proxies/state'
 import { LOG_LEVEL } from '@/constant'
 import {
   ConnectionEventType,
@@ -89,7 +90,13 @@ const rebuildProxies = (): ProxiesPayload => {
       }
     }
   }
-  return { proxies, providers: [] }
+  const payload = { proxies, providers: [] }
+  proxyMap.value = proxies
+  proxyGroupList.value = Object.values(proxies)
+    .filter((proxy) => proxy.all?.length)
+    .map((proxy) => proxy.name)
+  proxyProviederList.value = []
+  return payload
 }
 
 const startProxyStreams = (backend: Backend) => {
@@ -106,6 +113,7 @@ const startProxyStreams = (backend: Backend) => {
       (message) => {
         if (activeBackend.value?.uuid !== key) return
         groups = new Map(message.group.map((group) => [group.tag, group]))
+        rebuildProxies()
         resolveProxyReady?.()
         resolveProxyReady = undefined
       },
@@ -118,6 +126,7 @@ const startProxyStreams = (backend: Backend) => {
       (message) => {
         if (activeBackend.value?.uuid !== key) return
         outbounds = new Map(message.outbounds.map((outbound) => [outbound.tag, outbound]))
+        rebuildProxies()
       },
       backend,
     ),
@@ -320,7 +329,10 @@ export const singboxDriver: Driver = {
   config: {
     fetch: async () => {
       const status = await getSingboxClient()?.client.getClashModeStatus({})
-      return emptyConfig(status?.currentMode || '')
+      const config = emptyConfig(status?.currentMode || '')
+      config['mode-list'] = status?.modeList || []
+      config.modes = status?.modeList || []
+      return config
     },
     patch: async (config) => {
       if (typeof config.mode === 'string')
