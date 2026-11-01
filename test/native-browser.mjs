@@ -82,7 +82,9 @@ try {
   assert.match(proxies, /auto|direct/i, 'native proxy groups/selectors were not rendered')
   const nativeIdentity = await page.evaluate(`
     [...document.querySelectorAll('body *')].some((el) => /sing-box|1\\.14\\./i.test(el.innerText || '')) ||
-    [...document.querySelectorAll('img')].some((el) => /sing-box/i.test(el.src || ''))
+    [...document.querySelectorAll('[data-core-brand]')].some((el) =>
+      /SagerNet\\/sing-box/i.test(el.dataset.coreBrand || '') && /1\\.14\\./i.test(el.dataset.coreVersion || '')
+    )
   `)
   assert.equal(
     nativeIdentity,
