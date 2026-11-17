@@ -1,6 +1,6 @@
-// Gate automatic release creation on a reviewed sync PR merge.
-// All inputs are passed as environment variables so the check is testable
-// without network access; the workflow resolves PR fields through `gh` first.
+// Gate automatic release creation on real PR metadata from `gh pr view`.
+// Validation success is proven by the reusable workflow dependency in the
+// caller, not by a flag this script generates for itself.
 const required = [
   'REPO',
   'EVENT_NAME',
@@ -10,8 +10,6 @@ const required = [
   'PR_HEAD_REPO',
   'MERGE_SHA',
   'CUSTOM_SHA',
-  'VALIDATED',
-  'VALIDATION_SHA',
 ]
 
 const missing = required.filter((name) => !process.env[name])
@@ -36,10 +34,6 @@ if (process.env.PR_HEAD_REPO !== process.env.REPO)
 if (!/^[0-9a-f]{40}$/.test(process.env.MERGE_SHA)) fail('merge commit SHA is invalid')
 if (process.env.MERGE_SHA !== process.env.CUSTOM_SHA) {
   fail('merge commit is not the reviewed HEAD of custom')
-}
-if (process.env.VALIDATED !== 'true') fail('no successful validation for the merge result')
-if (process.env.VALIDATION_SHA !== process.env.MERGE_SHA) {
-  fail('validation result is for a different SHA')
 }
 
 console.log('eligible=true')

@@ -25,7 +25,7 @@ env:
 jobs:
   prepare:
     # Cheap trigger filter only; the authoritative gate is the eligibility
-    # script after validation succeeds.
+    # script using real PR metadata after validation succeeds.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ steps.pr.outputs.number }}
+      merged: ${{ steps.pr.outputs.merged }}
       merge_sha: ${{ steps.pr.outputs.merge_sha }}
       url: ${{ steps.pr.outputs.url }}
       base: ${{ steps.pr.outputs.base }}
@@ -70,7 +71,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   # Same reusable validation as the pre-merge sync PR, now on the exact
-  # post-merge commit. A failure here stops the run before any tag is created.
+  # post-merge commit. Its success is the only validation evidence needed.
   validate:
     needs: prepare
     permissions:
@@ -92,23 +93,20 @@ jobs:
         with:
           ref: custom
           fetch-depth: 0
-      - name: Enforce release gate and decide recovery state
+      - name: Enforce eligibility and decide recovery state
         id: state
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
-          PR_MERGED: 'true'
+          PR_MERGED: ${{ needs.prepare.outputs.merged }}
           PR_BASE: ${{ needs.prepare.outputs.base }}
           PR_HEAD: ${{ needs.prepare.outputs.head }}
           PR_HEAD_REPO: ${{ needs.prepare.outputs.head_repo }}
           MERGE_SHA: ${{ needs.prepare.outputs.merge_sha }}
-          VALIDATED: 'true'
-          VALIDATION_SHA: ${{ needs.prepare.outputs.merge_sha }}
         run: |
           set -euo pipefail
           git fetch origin custom
-          git fetch origin --tags --prune
           test "$(git rev-parse origin/custom)" = "$MERGE_SHA" || {
             echo 'merge commit is not the reviewed HEAD of custom' >&2; exit 1; }
           if ! CUSTOM_SHA="$MERGE_SHA" node scripts/release-eligibility.mjs; then
@@ -117,57 +115,70 @@ jobs:
           fi
 
           base_version=$(git show "$MERGE_SHA:package.json" | jq -r .version)
-          tags=$(git for-each-ref --format='{"name":"%(refname:short)","sha":"%(objectname:peeled)"}' \
-            refs/tags/sb-v* | jq -s '.')
+          git fetch origin --tags --prune
+          tags=$(node scripts/release-state.mjs --repo .)
           releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
             --jq 'map({tagName: .tag_name, assets: [.assets[].name]})')
 
           jq -n \
             --argjson tags "$tags" --argjson releases "$releases" \
             --arg mergeSha "$MERGE_SHA" --arg baseVersion "$base_version" \
-            '{mergeSha:$mergeSha, baseVersion:$baseVersion, validated:true,
-              validationSha:$mergeSha, tags:$tags, releases:$releases}' \
+            '{mergeSha:$mergeSha, baseVersion:$baseVersion, tags:$tags}' \
             > "$RUNNER_TEMP/release-state.json"
           state_output=$(node scripts/release-state.mjs --state "$RUNNER_TEMP/release-state.json")
           printf '%s\n' "$state_output" >> "$GITHUB_OUTPUT"
+          case "$state_output" in
+            *decision=create-tag*|*decision=publish*) ;;
+            *) echo "invalid release decision: $state_output" >&2; exit 1 ;;
+          esac
           printf 'Resolution: %s\n' "$(printf '%s\n' "$state_output" | sed -n 's/^reason=//p')" >> "$GITHUB_STEP_SUMMARY"
 
+  # One preparation job for both actionable decisions: create the tag, or
+  # verify that the existing reused tag resolves to the reviewed merge SHA.
   tag:
     needs: [prepare, decide]
-    if: needs.decide.outputs.decision == 'create-tag'
-    permissions:
-      contents: write
+    if: >-
+      needs.decide.outputs.decision == 'create-tag' ||
+      needs.decide.outputs.decision == 'publish'
+    outputs:
+      tag: ${{ steps.prepare_tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: custom
           fetch-depth: 0
-      - name: Create one tag at the reviewed merge commit
+      - name: Create or verify the stable tag
+        id: prepare_tag
         env:
           TAG: ${{ needs.decide.outputs.tag }}
           MERGE_SHA: ${{ needs.prepare.outputs.merge_sha }}
+          DECISION: ${{ needs.decide.outputs.decision }}
         run: |
           set -euo pipefail
+          git fetch origin --tags --prune
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag "$TAG" "$MERGE_SHA"
-          test "$(git rev-parse "$TAG^{commit}")" = "$MERGE_SHA"
-          git push origin "refs/tags/$TAG"
+          if [ "$DECISION" = 'create-tag' ]; then
+            git tag "$TAG" "$MERGE_SHA"
+            git push origin "refs/tags/$TAG"
+            git fetch origin --tags --prune
+          fi
+          resolved=$(git rev-parse "$TAG^{}")
+          test "$resolved" = "$MERGE_SHA" || {
+            echo "tag $TAG resolves to $resolved, expected $MERGE_SHA" >&2; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   publish:
-    needs: [prepare, decide, tag]
-    if: >-
-      needs.decide.outputs.decision == 'create-tag' ||
-      needs.decide.outputs.decision == 'publish'
+    needs: [prepare, tag]
     permissions:
       contents: write
     uses: ./.github/workflows/build-release.yml
     with:
-      tag: ${{ needs.decide.outputs.tag }}
+      tag: ${{ needs.tag.outputs.tag }}
       source_sha: ${{ needs.prepare.outputs.merge_sha }}
 
   summary:
-    needs: [prepare, decide, publish]
+    needs: [prepare, decide, tag, publish]
     if: always()
     steps:
       - name: Job summary
@@ -175,7 +186,7 @@ jobs:
           PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
           PR_URL: ${{ needs.prepare.outputs.url }}
           MERGE_SHA: ${{ needs.prepare.outputs.merge_sha }}
-          TAG: ${{ needs.decide.outputs.tag }}
+          TAG: ${{ needs.tag.outputs.tag }}
           DECISION: ${{ needs.decide.outputs.decision }}
           REASON: ${{ needs.decide.outputs.reason }}
           RELEASE_URL: ${{ needs.publish.outputs.url }}

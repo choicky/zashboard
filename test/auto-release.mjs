@@ -35,81 +35,67 @@ const parse = (output) =>
 const dir = mkdtempSync(join(tmpdir(), 'zashboard-release-'))
 const SHA = 'a'.repeat(40)
 const OTHER = 'b'.repeat(40)
-
-const decide = (state) => {
-  const path = join(dir, 'state.json')
-  writeFileSync(path, JSON.stringify(state))
-  return parse(node('scripts/release-state.mjs', ['--state', path]))
+const statePath = join(dir, 'state.json')
+const decide = (value) => {
+  writeFileSync(statePath, JSON.stringify(value))
+  return parse(node('scripts/release-state.mjs', ['--state', statePath]))
+}
+const decideFails = (value) => {
+  writeFileSync(statePath, JSON.stringify(value))
+  return fails('scripts/release-state.mjs', ['--state', statePath])
 }
 const tag = 'sb-v3.30.1'
 const state = (over = {}) => ({
   mergeSha: SHA,
   baseVersion: '3.30.0',
-  validated: true,
-  validationSha: SHA,
   tags: [{ name: 'sb-v3.30.0', sha: OTHER }],
-  releases: [],
   ...over,
 })
-const tagged = (assets = []) => ({
+const tagged = () => ({
   tags: [
     { name: 'sb-v3.30.0', sha: OTHER },
     { name: tag, sha: SHA },
   ],
-  releases: assets.length ? [{ tagName: tag, assets }] : [],
 })
-const ASSETS = [
-  'zashboard-singbox-full.zip',
-  'zashboard-singbox-no-fonts.zip',
-  'MANIFEST',
-  'SHA256SUMS',
-]
 
 try {
-  // --- one authoritative recovery state model ---
-  // No tag yet: allocate exactly one stable tag.
+  // --- three actionable outcomes only: create-tag / publish / fail ---
   assert.equal(decide(state()).decision, 'create-tag')
   assert.equal(decide(state()).tag, tag)
-  // Tag created but dispatch never started / build failed / Release absent.
-  for (const label of ['no dispatch', 'build failed', 'release absent']) {
+  // A matching stable tag is reused for every partial-failure state.
+  for (const label of [
+    'no dispatch',
+    'build failed',
+    'release absent',
+    'incomplete release',
+    'complete release',
+  ]) {
     const result = decide(state(tagged()))
     assert.equal(result.decision, 'publish', label)
     assert.equal(result.tag, tag, label)
   }
-  // Release incomplete: repair with the same tag, never a new version.
-  const partial = decide(state(tagged(ASSETS.slice(0, 2))))
-  assert.equal(partial.decision, 'publish')
-  assert.equal(partial.tag, tag)
-  // Release complete: idempotent no-op; repeated recovery converges.
-  for (let i = 0; i < 3; i++) {
-    const result = decide(state(tagged(ASSETS)))
-    assert.equal(result.decision, 'noop')
-    assert.equal(result.tag, tag)
-  }
+  // Repeated recovery keeps the same tag.
+  for (let i = 0; i < 3; i++) assert.equal(decide(state(tagged())).tag, tag)
   // A tag at another SHA is never reused; the allocator bumps past it.
-  const collided = decide(
-    state({ tags: [{ name: tag, sha: OTHER }], releases: [{ tagName: tag, assets: [] }] }),
-  )
+  const collided = decide(state({ tags: [{ name: tag, sha: OTHER }] }))
   assert.equal(collided.decision, 'create-tag')
   assert.notEqual(collided.tag, tag)
-  // Multiple stable tags for one merge: inconsistent state, refuse.
+  // Inconsistent or invalid state fails with a non-zero exit.
   assert.equal(
-    decide(
+    decideFails(
       state({
         tags: [
           { name: tag, sha: SHA },
           { name: 'sb-v3.30.2', sha: SHA },
         ],
       }),
-    ).decision,
-    'fail',
+    ),
+    true,
   )
-  // Validation gates: failure, cancellation, timeout and wrong SHA all fail.
-  assert.equal(decide(state({ validated: false })).decision, 'fail')
-  assert.equal(decide(state({ validationSha: OTHER })).decision, 'fail')
-  assert.equal(decide(state({ mergeSha: 'short' })).decision, 'fail')
+  assert.equal(decideFails(state({ mergeSha: 'short' })), true)
+  assert.equal(decideFails(state({ baseVersion: 'bad' })), true)
 
-  // --- release eligibility gate (includes validation proof) ---
+  // --- eligibility uses real PR metadata (validation is a job dependency) ---
   const eligible = {
     REPO: 'choicky/zashboard',
     EVENT_NAME: 'pull_request',
@@ -119,8 +105,6 @@ try {
     PR_HEAD_REPO: 'choicky/zashboard',
     MERGE_SHA: SHA,
     CUSTOM_SHA: SHA,
-    VALIDATED: 'true',
-    VALIDATION_SHA: SHA,
   }
   assert.match(node('scripts/release-eligibility.mjs', [], eligible), /eligible=true/)
   assert.equal(
@@ -144,19 +128,58 @@ try {
     fails('scripts/release-eligibility.mjs', [], { ...eligible, MERGE_SHA: 'abc' }),
     true,
   )
-  // Cancellation/timeout/absent validation all present as validated != true.
-  assert.equal(
-    fails('scripts/release-eligibility.mjs', [], { ...eligible, VALIDATED: 'false' }),
-    true,
-  )
-  assert.equal(
-    fails('scripts/release-eligibility.mjs', [], { ...eligible, VALIDATION_SHA: OTHER }),
-    true,
-  )
   assert.equal(
     fails('scripts/release-eligibility.mjs', [], { ...eligible, EVENT_NAME: 'push' }),
     true,
   )
+
+  // --- real git tag enumeration: lightweight, annotated, different commits ---
+  const repoDir = mkdtempSync(join(tmpdir(), 'zashboard-tags-'))
+  const git = (...args) =>
+    execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8' }).trim()
+  const enumerate = () => JSON.parse(node('scripts/release-state.mjs', ['--repo', repoDir]))
+  const realState = (mergeSha, tags = enumerate()) => ({ mergeSha, baseVersion: '3.30.0', tags })
+  try {
+    git('init', '-q')
+    git('config', 'user.email', 'test@example.invalid')
+    git('config', 'user.name', 'test')
+    writeFileSync(join(repoDir, 'shared.txt'), 'shared\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'base')
+    const first = git('rev-parse', 'HEAD')
+    git('tag', 'sb-v3.30.0') // lightweight
+    writeFileSync(join(repoDir, 'next.txt'), 'next\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'next')
+    const second = git('rev-parse', 'HEAD')
+    git('tag', '-a', 'sb-v3.30.1', '-m', 'annotated') // annotated
+    git('tag', 'sb-v3.30.9-rc1') // prerelease must be excluded
+
+    const tags = enumerate()
+    assert.deepEqual(tags, [
+      { name: 'sb-v3.30.0', sha: first },
+      { name: 'sb-v3.30.1', sha: second },
+    ])
+    for (const item of tags) assert.equal(item.sha, git('rev-parse', `${item.name}^{}`))
+    assert.equal(decide(realState(first)).tag, 'sb-v3.30.0')
+    assert.equal(decide(realState(second)).tag, 'sb-v3.30.1')
+
+    writeFileSync(join(repoDir, 'third.txt'), 'third\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'third')
+    const third = git('rev-parse', 'HEAD')
+    const created = decide(realState(third, tags))
+    assert.equal(created.decision, 'create-tag')
+    assert.equal(created.tag, 'sb-v3.30.2')
+
+    git('tag', 'sb-v3.30.2')
+    git('tag', 'sb-v3.30.3') // two stable tags at one commit
+    const ambiguous = enumerate()
+    assert.equal(ambiguous.filter((item) => item.sha === third).length, 2)
+    assert.equal(decideFails(realState(third, ambiguous)), true)
+  } finally {
+    rmSync(repoDir, { recursive: true, force: true })
+  }
 
   // --- complete asset verification ---
   const bundle = join(dir, 'bundle')
@@ -208,4 +231,4 @@ try {
   rmSync(dir, { recursive: true, force: true })
 }
 
-console.log('auto release: recovery states, eligibility and asset checks passed')
+console.log('auto release: outcomes, real tag enumeration, eligibility and asset checks passed')

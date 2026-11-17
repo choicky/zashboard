@@ -47,7 +47,9 @@ One state decision per merge commit:
   incomplete, or failed partway. Never allocate another version.
 - Several stable tags at the merge SHA: fail on inconsistent state.
 - Tag present but pointing at another SHA: fail; never overwrite.
-- Release complete with all required assets: idempotent no-op.
+
+Publication and asset checks run again on a reused tag, so repeated runs
+converge without a second verification implementation.
 
 Repeated runs after any intermediate failure converge on the same tag and
 Release.
