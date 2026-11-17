@@ -255,6 +255,10 @@ try {
     assert.doesNotMatch(job(name), /runs-on:|steps:/, name)
   }
 
+  // gh pr view has no `merged` JSON field; merge status derives from `state`.
+  assert.match(autoRelease, /--json number,state,/)
+  assert.match(autoRelease, /merged=\$\(jq -r '\.state == "MERGED"'/)
+
   // Provenance is fail-closed: missing/invalid tags and SHA mismatch abort.
   const provenance = buildRelease.slice(
     buildRelease.indexOf('name: Enforce release provenance'),
