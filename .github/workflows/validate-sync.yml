@@ -10,32 +10,77 @@ on:
         description: 'Existing PR number targeting custom'
         required: true
         type: string
+      sha:
+        description: 'Exact commit to validate (post-merge); empty uses the PR merge ref'
+        required: false
+        type: string
+      expected_head:
+        description: 'Commit that must be contained in the validated result'
+        required: false
+        type: string
+  # Called synchronously by sync-upstream and auto-release. A caller fails when
+  # any mandatory job here fails, so validation has one implementation only.
+  workflow_call:
+    inputs:
+      pr_number:
+        description: 'Existing PR number targeting custom'
+        required: true
+        type: string
+      sha:
+        description: 'Exact commit to validate (post-merge); empty uses the PR merge ref'
+        required: false
+        type: string
+      expected_head:
+        description: 'Commit that must be contained in the validated result'
+        required: false
+        type: string
 
 permissions:
   contents: read
   pull-requests: read
 
-# Always validate the actual proposed merge result, not just the head branch.
+# One run per validated commit/PR; an exact SHA never shares a group with a
+# pre-merge merge ref.
 concurrency:
-  group: validate-sync-${{ github.event.pull_request.number || inputs.pr_number }}
+  group: validate-sync-${{ inputs.sha || inputs.expected_head || inputs.pr_number || github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Resolve intended merge result
         id: ref
         env:
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+          SHA: ${{ inputs.sha || '' }}
         run: |
+          set -euo pipefail
           test -n "$PR_NUMBER"
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "merge_ref=refs/pull/$PR_NUMBER/merge" >> "$GITHUB_OUTPUT"
+          if [ -n "$SHA" ]; then
+            echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=refs/pull/$PR_NUMBER/merge" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v6
         with:
-          ref: ${{ steps.ref.outputs.merge_ref }}
+          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
+      - name: Verify validated result
+        env:
+          SHA: ${{ inputs.sha || '' }}
+          EXPECTED_HEAD: ${{ inputs.expected_head || '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SHA" ]; then
+            test "$(git rev-parse HEAD)" = "$SHA" || {
+              echo 'validated commit does not match the requested SHA' >&2; exit 1; }
+          elif [ -n "$EXPECTED_HEAD" ]; then
+            git merge-base --is-ancestor "$EXPECTED_HEAD" HEAD || {
+              echo 'proposed merge result does not contain the expected upstream head' >&2; exit 1; }
+          fi
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -62,10 +107,11 @@ jobs:
         if: always()
         env:
           PR_NUMBER: ${{ steps.ref.outputs.pr_number }}
+          REF: ${{ steps.ref.outputs.ref }}
         run: |
           {
             printf '## Synchronization validation\n\n'
-            printf 'Validated merge ref `refs/pull/%s/merge`.\n\n' "${PR_NUMBER:-unknown}"
+            printf 'Validated `%s` for PR #%s.\n\n' "$REF" "${PR_NUMBER:-unknown}"
             printf 'Checks: locked install, type-check, non-mutating lint, full build,\n'
             printf 'compatibility tests, browser acceptance, no-fonts build, real sing-box\n'
             printf 'native endpoint and native browser acceptance.\n'
@@ -73,17 +119,24 @@ jobs:
 
   native-browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Resolve PR merge ref
         id: ref
         env:
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+          SHA: ${{ inputs.sha || '' }}
         run: |
+          set -euo pipefail
           test -n "$PR_NUMBER"
-          echo "merge_ref=refs/pull/$PR_NUMBER/merge" >> "$GITHUB_OUTPUT"
+          if [ -n "$SHA" ]; then
+            echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=refs/pull/$PR_NUMBER/merge" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v6
         with:
-          ref: ${{ steps.ref.outputs.merge_ref }}
+          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
@@ -93,6 +146,9 @@ jobs:
           version: 11.20.0
       - name: Build and run native sing-box acceptance
         # Pinned to the current stable release and the vendored proto source.
+        # Rebuilds here because this job must test the browser against a build
+        # on its own isolated runner; sharing an artifact would add a dependency
+        # graph for a ~2s build.
         run: |
           set -euo pipefail
           pnpm install --frozen-lockfile

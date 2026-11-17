@@ -8,7 +8,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  actions: write
 
 concurrency:
   group: upstream-sync
@@ -23,6 +22,9 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      upstream_sha: ${{ steps.compare.outputs.upstream_sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -79,27 +81,24 @@ jobs:
         if: steps.compare.outputs.needs_sync == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPSTREAM_SHA: ${{ steps.compare.outputs.upstream_sha }}
         run: |
           set -euo pipefail
-
-          # The relevant range is what custom does not contain yet. main may
-          # already be fast-forwarded when this workflow runs, so an
-          # old-main..new-main range would be empty and misleading.
-          range="origin/custom..$UPSTREAM_SHA"
-          changed=$(git diff --name-only "$range" || true)
-          sensitive=$(printf '%s\n' "$changed" | grep -Ei 'sing.?box|src/gen/|vendor/|backend|api|assembly|proto' || true)
+          range_json=$(node scripts/upstream-range.mjs \
+            --repo "$GITHUB_WORKSPACE" --custom origin/custom --upstream upstream/main)
+          range=$(printf '%s' "$range_json" | jq -r .range)
+          commits=$(printf '%s' "$range_json" | jq -r .commits)
+          changed=$(printf '%s' "$range_json" | jq -r '.files[]' || true)
+          sensitive=$(printf '%s' "$range_json" | jq -r '.sensitive | if length == 0 then "none detected" else join("\n") end')
+          log=$(printf '%s' "$range_json" | jq -r '.log[]' || true)
           {
             printf '## Upstream synchronization\n\n'
-            printf 'Upstream range: `%s`\n\n' "$range"
-            printf '### Upstream commits\n\n```\n'
-            git log --oneline --no-merges "$range" || true
-            printf '\n```\n\n'
-            printf '### Changed files\n\n```\n%s\n```\n\n' "$changed"
-            printf '### sing-box-sensitive files\n\n```\n%s\n```\n\n' "${sensitive:-none detected}"
+            printf 'Upstream-only range: `%s` (from merge base, %s commits)\n\n' "$range" "$commits"
+            printf '### Upstream commits\n\n```\n%s\n```\n\n' "$log"
+            printf '### Changed files (upstream side only)\n\n```\n%s\n```\n\n' "$changed"
+            printf '### sing-box-sensitive files\n\n```\n%s\n```\n\n' "$sensitive"
             printf '### Validation status\n\n'
-            printf 'Automated validation runs for the exact PR merge result in\n'
-            printf '`Validate synchronization result`. Review its result before merging.\n\n'
+            printf '`Validate synchronization result` runs on this exact merge result and\n'
+            printf 'must succeed before this PR may be merged. Review its result.\n\n'
             printf '### Unresolved risks\n\n'
             printf 'Upstream changes may overlap restored sing-box compatibility code. Check the\n'
             printf 'Clash API and native gRPC-Web results; Git reporting no conflicts is not approval.\n\n'
@@ -146,38 +145,6 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo 'action=created' >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch validation for the exact PR
-        id: dispatch
-        # A PR created with GITHUB_TOKEN may produce a pull_request run, but in
-        # this repository that run stops at `action_required` with zero jobs.
-        # workflow_dispatch is exempt from GITHUB_TOKEN event suppression and
-        # was observed to execute both validation jobs, so dispatch explicitly
-        # and verify the new run actually appears.
-        if: steps.pr.outputs.number != '' && steps.pr.outputs.failure_reason == ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-        run: |
-          set -euo pipefail
-          before=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow validate-sync.yml \
-            --event workflow_dispatch --limit 20 --json databaseId | jq -r '.[].databaseId' | sort)
-          gh workflow run validate-sync.yml --repo "$GITHUB_REPOSITORY" --ref custom \
-            --field pr_number="$PR_NUMBER"
-          new_run=''
-          for _ in $(seq 1 30); do
-            after=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow validate-sync.yml \
-              --event workflow_dispatch --limit 20 --json databaseId | jq -r '.[].databaseId' | sort)
-            new_run=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -n 1)
-            [ -n "$new_run" ] && break
-            sleep 2
-          done
-          if [ -z "$new_run" ]; then
-            echo 'validation workflow did not start after explicit dispatch' >&2
-            echo 'failure_reason=validation workflow did not start' >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-          echo "validation_run_url=https://github.com/$GITHUB_REPOSITORY/actions/runs/$new_run" >> "$GITHUB_OUTPUT"
-
       - name: Job summary
         if: always()
         env:
@@ -191,7 +158,6 @@ jobs:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           PR_URL: ${{ steps.pr.outputs.url }}
           FAIL_PR: ${{ steps.pr.outputs.failure_reason }}
-          VALIDATION_URL: ${{ steps.dispatch.outputs.validation_run_url }}
         run: |
           {
             printf '## Upstream synchronization\n\n'
@@ -204,10 +170,22 @@ jobs:
             printf '| PR action | `%s` |\n' "${PR_ACTION:-n/a}"
             printf '| PR number | `%s` |\n' "${PR_NUMBER:-n/a}"
             printf '| PR URL | %s |\n' "${PR_URL:-n/a}"
-            printf '| Validation run | %s |\n' "${VALIDATION_URL:-n/a}"
             printf '\n'
             reason="${FAIL_COMPARE:-$FAIL_PR}"
             if [ -n "$reason" ]; then
               printf '**Failure reason:** %s\n' "$reason"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Synchronous reusable call: the caller fails if any validation job fails,
+  # so a sync run can never succeed while its PR is unvalidated.
+  validate:
+    needs: sync
+    if: needs.sync.outputs.pr_number != ''
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/validate-sync.yml
+    with:
+      pr_number: ${{ needs.sync.outputs.pr_number }}
+      expected_head: ${{ needs.sync.outputs.upstream_sha }}

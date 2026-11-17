@@ -2,16 +2,40 @@ name: Fork build and release
 
 on:
   push:
-    branches: [custom]
     tags: ['sb-v*']
   workflow_dispatch:
+  # Single implementation of package construction and publication. Callers
+  # wait for its real result and pass the exact tag/source SHA explicitly.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Stable sb-v tag to build and publish'
+        required: true
+        type: string
+      source_sha:
+        description: 'Reviewed commit the tag points at'
+        required: true
+        type: string
+    outputs:
+      tag:
+        value: ${{ jobs.release.outputs.tag }}
+      url:
+        value: ${{ jobs.release.outputs.url }}
 
 permissions:
   contents: write
 
+# A push to custom only produced a second, unreferenced dev artifact: PR
+# validation already builds both font modes, and publication builds the exact
+# tag/source below. Keep tag pushes, manual dispatch and reusable calls.
 concurrency:
-  group: fork-release-${{ github.ref }}
+  group: fork-release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
+
+env:
+  GH_REPO: ${{ github.repository }}
+  RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/sb-v') && github.ref_name || format('sb-v0.0.0-dev.{0}', github.sha)) }}
+  RELEASE_SHA: ${{ inputs.source_sha || github.sha }}
 
 jobs:
   build:
@@ -25,6 +49,9 @@ jobs:
             name: zashboard-singbox-no-fonts
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -34,8 +61,8 @@ jobs:
       - name: Install and build
         env:
           FONT: ${{ matrix.font }}
-          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/sb-v') && github.ref_name || format('sb-v0.0.0-dev.{0}', github.sha) }}
         run: |
+          set -euo pipefail
           pnpm install --frozen-lockfile
           pnpm run build
           test -f dist/index.html
@@ -45,12 +72,13 @@ jobs:
           (cd package && zip -qr "../${{ matrix.name }}.zip" dist)
       - name: Check package and checksum
         run: |
+          set -euo pipefail
           unzip -l "${{ matrix.name }}.zip" | grep -E 'dist/index.html|dist/assets/'
           sha256sum "${{ matrix.name }}.zip" >> SHA256SUMS
           {
-            printf 'release_tag=%s\n' "$GITHUB_REF_NAME"
-            printf 'source_sha=%s\n' "$GITHUB_SHA"
-            printf 'release_identity=%s\n' "$GITHUB_REF_NAME"
+            printf 'release_tag=%s\n' "$RELEASE_TAG"
+            printf 'source_sha=%s\n' "$RELEASE_SHA"
+            printf 'release_identity=%s\n' "$RELEASE_TAG"
             printf 'artifact=%s\n' "${{ matrix.name }}.zip"
           } > MANIFEST
       - uses: actions/upload-artifact@v7
@@ -60,35 +88,36 @@ jobs:
             ${{ matrix.name }}.zip
             MANIFEST
             SHA256SUMS
+
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/sb-v')
+    if: ${{ inputs.tag != '' || startsWith(github.ref, 'refs/tags/sb-v') }}
+    outputs:
+      tag: ${{ env.RELEASE_TAG }}
+      url: ${{ steps.publish.outputs.url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - name: Enforce release provenance
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           git fetch origin custom
-          if [[ "$GITHUB_REF_NAME" =~ ^sb-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            test "$(git rev-parse origin/custom)" = "$GITHUB_SHA" || {
-              echo 'stable releases must point exactly at custom' >&2
-              exit 1
-            }
-          else
-            git merge-base --is-ancestor origin/custom "$GITHUB_SHA" || {
-              echo 'prereleases must be based on reviewed custom work' >&2
-              exit 1
-            }
-            count=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.base.ref == "custom")] | length')
-            test "$count" -gt 0 || {
-              echo 'prerelease source must be associated with a PR targeting custom' >&2
-              exit 1
-            }
-          fi
+          # Reviewed merges are ancestors of custom even if recovery runs later.
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/custom || {
+            echo 'release source is not on custom' >&2
+            exit 1
+          }
+          count=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/pulls" \
+            --jq '[.[] | select(.base.ref == "custom")] | length')
+          test "$count" -gt 0 || {
+            echo 'release source must be associated with a PR targeting custom' >&2
+            exit 1
+          }
       - uses: actions/download-artifact@v8
         with:
           path: release
@@ -97,28 +126,57 @@ jobs:
           set -euo pipefail
           find release -name '*.zip' -exec cp {} . \;
           {
-            printf 'release_tag=%s\n' "$GITHUB_REF_NAME"
-            printf 'source_sha=%s\n' "$GITHUB_SHA"
-            printf 'release_identity=%s\n' "$GITHUB_REF_NAME"
-            find . -maxdepth 1 -name 'zashboard-*.zip' -printf 'artifact=%f\n' | sort
+            printf 'release_tag=%s\n' "$RELEASE_TAG"
+            printf 'source_sha=%s\n' "$RELEASE_SHA"
+            printf 'release_identity=%s\n' "$RELEASE_TAG"
+            printf 'artifact=zashboard-singbox-full.zip\n'
+            printf 'artifact=zashboard-singbox-no-fonts.zip\n'
           } > MANIFEST
           find . -maxdepth 1 -name 'zashboard-*.zip' -exec sha256sum {} \; | sort > SHA256SUMS
-          node scripts/verify-release-assets.mjs --dir .
-      - uses: softprops/action-gh-release@v3
+          node scripts/verify-release-assets.mjs --dir . --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
+      - name: Publish (idempotent on the same tag)
+        id: publish
+        uses: softprops/action-gh-release@v3
         with:
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-test') }}
-          make_latest: ${{ !contains(github.ref_name, '-rc') && !contains(github.ref_name, '-test') }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ env.RELEASE_SHA }}
+          overwrite_files: true
+          prerelease: ${{ contains(env.RELEASE_TAG, '-rc') || contains(env.RELEASE_TAG, '-test') }}
+          make_latest: ${{ !contains(env.RELEASE_TAG, '-rc') && !contains(env.RELEASE_TAG, '-test') }}
           generate_release_notes: true
           files: |
-            zashboard-*.zip
+            zashboard-singbox-full.zip
+            zashboard-singbox-no-fonts.zip
             MANIFEST
             SHA256SUMS
-      - name: Verify published assets and latest URLs
+      - name: Verify published release state
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          api="repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"
+          # GitHub propagation is not immediate; retry only this bounded check.
+          state=''
+          for _ in $(seq 1 5); do
+            state=$(gh api "$api" --jq '{tag:.tag_name,sha:.target_commitish,assets:[.assets[].name]}' 2>/dev/null || true)
+            if [ -n "$state" ] && [ "$(printf '%s' "$state" | jq -r .tag)" = "$RELEASE_TAG" ]; then
+              break
+            fi
+            sleep 5
+          done
+          test "$(printf '%s' "$state" | jq -r .tag)" = "$RELEASE_TAG" || {
+            echo "release $RELEASE_TAG is not visible" >&2; exit 1; }
+          test "$(printf '%s' "$state" | jq -r .sha)" = "$RELEASE_SHA" || {
+            echo 'release source SHA does not match the reviewed commit' >&2; exit 1; }
+          actual=$(printf '%s' "$state" | jq -r '.assets[]' | sort | paste -sd' ' -)
+          test "$actual" = 'MANIFEST SHA256SUMS zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip' || {
+            echo "unexpected release asset set: $actual" >&2; exit 1; }
+      - name: Verify published asset URLs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
           for name in zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip MANIFEST SHA256SUMS; do
             code=000
             for _ in $(seq 1 5); do
@@ -129,7 +187,7 @@ jobs:
             test "$code" = 200 || { echo "asset $name is not downloadable" >&2; exit 1; }
           done
           (cd "$RUNNER_TEMP" && sha256sum -c "$GITHUB_WORKSPACE/SHA256SUMS")
-          if [[ ! "$GITHUB_REF_NAME" =~ -rc|-test ]]; then
+          if [[ ! "$RELEASE_TAG" =~ -rc|-test ]]; then
             for name in zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip; do
               code=$(curl -sSL -o /dev/null -w '%{http_code}' \
                 "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/$name")
@@ -142,8 +200,8 @@ jobs:
           {
             printf '## Fork release\n\n'
             printf '| Item | Value |\n| --- | --- |\n'
-            printf '| Tag | `%s` |\n' "$GITHUB_REF_NAME"
-            printf '| Source SHA | `%s` |\n' "$GITHUB_SHA"
+            printf '| Tag | `%s` |\n' "$RELEASE_TAG"
+            printf '| Source SHA | `%s` |\n' "$RELEASE_SHA"
             for name in zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip MANIFEST SHA256SUMS; do
               if [ -f "$name" ]; then
                 printf '| %s | %s bytes | `%s` |\n' "$name" "$(stat -c%s "$name")" "$(sha256sum "$name" | cut -d' ' -f1)"

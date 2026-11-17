@@ -12,9 +12,8 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
-  actions: write
 
 concurrency:
   group: auto-release
@@ -24,17 +23,28 @@ env:
   GH_REPO: ${{ github.repository }}
 
 jobs:
-  release:
-    # Only a merged PR is eligible. Closing without merging does nothing.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+  prepare:
+    # Cheap trigger filter only; the authoritative gate is the eligibility
+    # script after validation succeeds.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'custom' &&
+       github.event.pull_request.head.ref == 'main' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      merge_sha: ${{ steps.pr.outputs.merge_sha }}
+      url: ${{ steps.pr.outputs.url }}
+      base: ${{ steps.pr.outputs.base }}
+      head: ${{ steps.pr.outputs.head }}
+      head_repo: ${{ steps.pr.outputs.head_repo }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: custom
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Resolve merged synchronization PR
         id: pr
         env:
@@ -43,72 +53,99 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$PR_NUMBER"
-          pr_json="$RUNNER_TEMP/pr.json"
           gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --json number,state,merged,baseRefName,headRefName,headRepository,mergeCommit,url \
-            > "$pr_json"
-          echo "number=$(jq -r .number "$pr_json")" >> "$GITHUB_OUTPUT"
-          echo "merged=$(jq -r .merged "$pr_json")" >> "$GITHUB_OUTPUT"
-          echo "base=$(jq -r .baseRefName "$pr_json")" >> "$GITHUB_OUTPUT"
-          echo "head=$(jq -r .headRefName "$pr_json")" >> "$GITHUB_OUTPUT"
-          echo "head_repo=$(jq -r '.headRepository.nameWithOwner // empty' "$pr_json")" >> "$GITHUB_OUTPUT"
-          echo "merge_sha=$(jq -r '.mergeCommit.oid // empty' "$pr_json")" >> "$GITHUB_OUTPUT"
-          echo "url=$(jq -r .url "$pr_json")" >> "$GITHUB_OUTPUT"
+            --json number,merged,baseRefName,headRefName,headRepository,mergeCommit,url \
+            > "$RUNNER_TEMP/pr.json"
+          pr="$RUNNER_TEMP/pr.json"
+          merge_sha=$(jq -r '.mergeCommit.oid // empty' "$pr")
+          test -n "$merge_sha" || { echo 'PR has no merge commit' >&2; exit 1; }
+          {
+            echo "number=$(jq -r .number "$pr")"
+            echo "merged=$(jq -r .merged "$pr")"
+            echo "base=$(jq -r .baseRefName "$pr")"
+            echo "head=$(jq -r .headRefName "$pr")"
+            echo "head_repo=$(jq -r '.headRepository.nameWithOwner // empty' "$pr")"
+            echo "merge_sha=$merge_sha"
+            echo "url=$(jq -r .url "$pr")"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Enforce qualifying merge and source SHA
-        id: source
+  # Same reusable validation as the pre-merge sync PR, now on the exact
+  # post-merge commit. A failure here stops the run before any tag is created.
+  validate:
+    needs: prepare
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/validate-sync.yml
+    with:
+      pr_number: ${{ needs.prepare.outputs.pr_number }}
+      sha: ${{ needs.prepare.outputs.merge_sha }}
+
+  decide:
+    needs: [prepare, validate]
+    outputs:
+      decision: ${{ steps.state.outputs.decision }}
+      tag: ${{ steps.state.outputs.tag }}
+      reason: ${{ steps.state.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: custom
+          fetch-depth: 0
+      - name: Enforce release gate and decide recovery state
+        id: state
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
-          PR_MERGED: ${{ steps.pr.outputs.merged }}
-          PR_BASE: ${{ steps.pr.outputs.base }}
-          PR_HEAD: ${{ steps.pr.outputs.head }}
-          PR_HEAD_REPO: ${{ steps.pr.outputs.head_repo }}
-          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
+          PR_MERGED: 'true'
+          PR_BASE: ${{ needs.prepare.outputs.base }}
+          PR_HEAD: ${{ needs.prepare.outputs.head }}
+          PR_HEAD_REPO: ${{ needs.prepare.outputs.head_repo }}
+          MERGE_SHA: ${{ needs.prepare.outputs.merge_sha }}
+          VALIDATED: 'true'
+          VALIDATION_SHA: ${{ needs.prepare.outputs.merge_sha }}
         run: |
           set -euo pipefail
           git fetch origin custom
-          custom_sha=$(git rev-parse origin/custom)
-          echo "custom_sha=$custom_sha" >> "$GITHUB_OUTPUT" 2>/dev/null || true
-          if ! CUSTOM_SHA="$custom_sha" node scripts/release-eligibility.mjs; then
-            echo 'Refusing to release: PR is not a reviewed main -> custom merge' >&2
+          git fetch origin --tags --prune
+          test "$(git rev-parse origin/custom)" = "$MERGE_SHA" || {
+            echo 'merge commit is not the reviewed HEAD of custom' >&2; exit 1; }
+          if ! CUSTOM_SHA="$MERGE_SHA" node scripts/release-eligibility.mjs; then
+            echo 'PR does not qualify for an automatic release' >&2
             exit 1
           fi
 
-      - name: Compute fork release version
-        id: version
-        env:
-          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
-        run: |
-          set -euo pipefail
           base_version=$(git show "$MERGE_SHA:package.json" | jq -r .version)
-          existing="$RUNNER_TEMP/existing-tags.txt"
-          git ls-remote --tags origin 'refs/tags/sb-v*' | awk -F/ '{print $NF}' \
-            | grep -v '\^{}' > "$existing"
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName \
-            | jq -r '.[].tagName' >> "$existing"
-          sort -u -o "$existing" "$existing"
-          node scripts/resolve-release-version.mjs \
-            --base-version "$base_version" --existing-file "$existing" >> "$GITHUB_OUTPUT"
+          tags=$(git for-each-ref --format='{"name":"%(refname:short)","sha":"%(objectname:peeled)"}' \
+            refs/tags/sb-v* | jq -s '.')
+          releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq 'map({tagName: .tag_name, assets: [.assets[].name]})')
 
-      - name: Refuse an existing tag or Release
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "tag $TAG already exists; refusing to overwrite" >&2
-            exit 1
-          fi
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "release $TAG already exists; refusing to overwrite" >&2
-            exit 1
-          fi
+          jq -n \
+            --argjson tags "$tags" --argjson releases "$releases" \
+            --arg mergeSha "$MERGE_SHA" --arg baseVersion "$base_version" \
+            '{mergeSha:$mergeSha, baseVersion:$baseVersion, validated:true,
+              validationSha:$mergeSha, tags:$tags, releases:$releases}' \
+            > "$RUNNER_TEMP/release-state.json"
+          state_output=$(node scripts/release-state.mjs --state "$RUNNER_TEMP/release-state.json")
+          printf '%s\n' "$state_output" >> "$GITHUB_OUTPUT"
+          printf 'Resolution: %s\n' "$(printf '%s\n' "$state_output" | sed -n 's/^reason=//p')" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Create tag at the reviewed merge commit
+  tag:
+    needs: [prepare, decide]
+    if: needs.decide.outputs.decision == 'create-tag'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: custom
+          fetch-depth: 0
+      - name: Create one tag at the reviewed merge commit
         env:
-          TAG: ${{ steps.version.outputs.tag }}
-          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          MERGE_SHA: ${{ needs.prepare.outputs.merge_sha }}
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
@@ -117,46 +154,39 @@ jobs:
           test "$(git rev-parse "$TAG^{commit}")" = "$MERGE_SHA"
           git push origin "refs/tags/$TAG"
 
-      - name: Dispatch build and release for the new tag
-        id: dispatch
-        # A tag pushed with GITHUB_TOKEN does not start the tag-triggered
-        # build-release run. workflow_dispatch is exempt and is verified below.
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          set -euo pipefail
-          before=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-release.yml \
-            --event workflow_dispatch --limit 20 --json databaseId | jq -r '.[].databaseId' | sort)
-          gh workflow run build-release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
-          new_run=''
-          for _ in $(seq 1 30); do
-            after=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-release.yml \
-              --event workflow_dispatch --limit 20 --json databaseId | jq -r '.[].databaseId' | sort)
-            new_run=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -n 1)
-            [ -n "$new_run" ] && break
-            sleep 2
-          done
-          if [ -z "$new_run" ]; then
-            echo 'build-release workflow did not start after explicit dispatch' >&2
-            exit 1
-          fi
-          echo "run_url=https://github.com/$GITHUB_REPOSITORY/actions/runs/$new_run" >> "$GITHUB_OUTPUT"
+  publish:
+    needs: [prepare, decide, tag]
+    if: >-
+      needs.decide.outputs.decision == 'create-tag' ||
+      needs.decide.outputs.decision == 'publish'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-release.yml
+    with:
+      tag: ${{ needs.decide.outputs.tag }}
+      source_sha: ${{ needs.prepare.outputs.merge_sha }}
 
+  summary:
+    needs: [prepare, decide, publish]
+    if: always()
+    steps:
       - name: Job summary
-        if: always()
         env:
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-          PR_URL: ${{ steps.pr.outputs.url }}
-          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
-          TAG: ${{ steps.version.outputs.tag }}
-          RUN_URL: ${{ steps.dispatch.outputs.run_url }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+          PR_URL: ${{ needs.prepare.outputs.url }}
+          MERGE_SHA: ${{ needs.prepare.outputs.merge_sha }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          DECISION: ${{ needs.decide.outputs.decision }}
+          REASON: ${{ needs.decide.outputs.reason }}
+          RELEASE_URL: ${{ needs.publish.outputs.url }}
         run: |
           {
             printf '## Automatic fork release\n\n'
             printf '| Item | Value |\n| --- | --- |\n'
             printf '| Reviewed PR | #%s %s |\n' "${PR_NUMBER:-n/a}" "${PR_URL:-}"
             printf '| Source (merge) SHA | `%s` |\n' "${MERGE_SHA:-n/a}"
-            printf '| Release tag | `%s` |\n' "${TAG:-n/a}"
-            printf '| Build/release run | %s |\n' "${RUN_URL:-n/a}"
+            printf '| Decision | `%s` |\n' "${DECISION:-n/a}"
+            printf '| Tag | `%s` |\n' "${TAG:-n/a}"
+            printf '| Release | %s |\n' "${RELEASE_URL:-n/a}"
+            printf '\n%s\n' "${REASON:-}"
           } >> "$GITHUB_STEP_SUMMARY"
