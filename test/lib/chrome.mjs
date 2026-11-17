@@ -1,6 +1,7 @@
-// 启动一次性的 headless Chrome:用临时 user-data-dir,跑完就删,不碰用户自己的浏览器配置。
+// 启动一次性的 headless Chrome:临时 profile、Chrome 自己分配调试端口,
+// 跑完连进程组一起清掉。只重试基础设施启动失败,不重试任何产品断言。
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,16 +29,34 @@ const resolveChrome = () => {
   )
 }
 
-export const launchChrome = async ({ port = 9222, headless = true, args = [] } = {}) => {
-  const binary = resolveChrome()
-  const userDataDir = await mkdtemp(join(tmpdir(), 'zashboard-perf-'))
+const START_TIMEOUT_MS = 20000
+const READY_TIMEOUT_MS = 5000
+const START_ATTEMPTS = 3
+
+const killTree = async (child) => {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  try {
+    if (process.platform === 'win32') child.kill('SIGKILL')
+    else process.kill(-child.pid, 'SIGKILL')
+  } catch {
+    try {
+      child.kill('SIGKILL')
+    } catch {}
+  }
+  await Promise.race([new Promise((done) => child.once('exit', done)), sleep(3000)])
+}
+
+const launchAttempt = async (binary, headless, args, attempt) => {
+  const userDataDir = await mkdtemp(join(tmpdir(), 'zashboard-chrome-'))
   const linuxFlags = process.platform === 'linux' ? ['--no-sandbox', '--disable-dev-shm-usage'] : []
   let stderr = ''
+  let exitInfo = null
   const child = spawn(
     binary,
     [
       headless ? '--headless=new' : '',
-      `--remote-debugging-port=${port}`,
+      // 让 Chrome 原子地选一个空闲端口,避开"先检查再绑定"的端口竞态
+      '--remote-debugging-port=0',
       `--user-data-dir=${userDataDir}`,
       '--no-first-run',
       '--no-default-browser-check',
@@ -50,37 +69,79 @@ export const launchChrome = async ({ port = 9222, headless = true, args = [] } =
       ...args,
       'about:blank',
     ].filter(Boolean),
-    { stdio: ['ignore', 'ignore', 'pipe'] },
+    { stdio: ['ignore', 'ignore', 'pipe'], detached: process.platform !== 'win32' },
   )
   child.stderr.on('data', (chunk) => {
-    stderr = (stderr + chunk.toString()).slice(-2000)
+    stderr = (stderr + chunk.toString()).slice(-4000)
+  })
+  child.once('exit', (code, signal) => {
+    exitInfo = { code, signal }
   })
 
-  for (let i = 0; i < 100; i++) {
-    try {
-      await fetch(`http://127.0.0.1:${port}/json/version`)
-      return {
-        async close() {
-          // 等进程真的退出再删 user-data-dir,否则 Chrome 还在写文件,rmdir 会 ENOTEMPTY;
-          // 但进程可能已经自己没了,所以既要判断 exitCode,也要留个超时兜底,不能干等。
-          if (child.exitCode === null) {
-            const exited = new Promise((resolve) => child.once('exit', resolve))
+  const cleanup = async () => {
+    await killTree(child)
+    await rm(userDataDir, { recursive: true, force: true }).catch(() => {})
+  }
+  const diagnostics = () =>
+    `binary=${binary} attempt=${attempt}/${START_ATTEMPTS} profile=${userDataDir} ` +
+    `exit=${exitInfo ? `${exitInfo.code}/${exitInfo.signal}` : 'running'}` +
+    (stderr ? `\n${stderr}` : '')
 
-            child.kill()
-            await Promise.race([exited, sleep(3000)])
-          }
-
-          await rm(userDataDir, { recursive: true, force: true }).catch(() => {})
-        },
+  try {
+    const portFile = join(userDataDir, 'DevToolsActivePort')
+    const startedAt = Date.now()
+    let port = null
+    while (Date.now() - startedAt < START_TIMEOUT_MS) {
+      if (exitInfo) throw new Error(`Chrome exited before DevTools was ready (${diagnostics()})`)
+      if (existsSync(portFile)) {
+        const line = readFileSync(portFile, 'utf8').split('\n')[0]?.trim()
+        if (/^\d+$/.test(line)) {
+          port = Number(line)
+          break
+        }
       }
-    } catch {
       await sleep(100)
     }
-  }
+    if (!port) {
+      throw new Error(
+        `DevToolsActivePort did not appear within ${START_TIMEOUT_MS}ms (${diagnostics()})`,
+      )
+    }
 
-  child.kill()
-  await rm(userDataDir, { recursive: true, force: true })
-  throw new Error(
-    `Chrome 起来了但 ${port} 端口的调试接口没响应${stderr ? `\n${stderr}` : ''}`,
-  )
+    const readyAt = Date.now()
+    let ready = false
+    while (Date.now() - readyAt < READY_TIMEOUT_MS) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/json/version`)
+        if (response.ok) {
+          ready = true
+          break
+        }
+      } catch {}
+      if (exitInfo) break
+      await sleep(100)
+    }
+    if (!ready) {
+      throw new Error(`DevTools endpoint ${port} did not respond (${diagnostics()})`)
+    }
+
+    return { port, close: cleanup }
+  } catch (error) {
+    await cleanup()
+    throw error
+  }
+}
+
+export const launchChrome = async ({ headless = true, args = [] } = {}) => {
+  const binary = resolveChrome()
+  let lastError
+  for (let attempt = 1; attempt <= START_ATTEMPTS; attempt++) {
+    try {
+      return await launchAttempt(binary, headless, args, attempt)
+    } catch (error) {
+      lastError = error
+      if (attempt < START_ATTEMPTS) await sleep(500)
+    }
+  }
+  throw lastError
 }

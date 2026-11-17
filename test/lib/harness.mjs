@@ -7,7 +7,6 @@ import { join } from 'node:path'
 import { createMockServer } from '../mock-server.mjs'
 import { connectBrowser, waitFor } from './cdp.mjs'
 import { launchChrome } from './chrome.mjs'
-import { findFreePort } from './ports.mjs'
 import { serveDirectory } from './static-server.mjs'
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
@@ -27,9 +26,8 @@ export const startHarness = async ({
 
   const mock = await createMockServer({ groups, nodes, connections })
   const app = appUrl ? { url: appUrl, close: () => {} } : await serveDirectory(DIST_DIR)
-  const debuggingPort = await findFreePort()
-  const chrome = await launchChrome({ port: debuggingPort, headless })
-  const browser = await connectBrowser(debuggingPort)
+  const chrome = await launchChrome({ headless })
+  const browser = await connectBrowser(chrome.port)
 
   /*
    * 直接开 #/proxies?hostname=... 是不行的:没有后端时路由守卫会先跳到 /setup,

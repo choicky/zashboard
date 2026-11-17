@@ -125,9 +125,8 @@ test/
   lib/
     harness.mjs      假后端 + 静态服务 + Chrome + 打开代理页,串成一件事
     cdp.mjs          够用就好的 CDP 客户端
-    chrome.mjs       起一个一次性的 headless Chrome
+    chrome.mjs       起一次性 headless Chrome;Chrome 自选调试端口,启动失败有界重试并清理进程组
     static-server.mjs 伺服 dist
-    ports.mjs        临时端口
 ```
 
 ## 踩过的坑(改这些脚本时留意)
