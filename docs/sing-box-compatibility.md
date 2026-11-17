@@ -102,23 +102,14 @@ PR 的隔离验收配置同时启用了官方 Clash API mode 服务，已在真�
 或网络错误只会清除更新提示，不会阻断已验证的会话。若用户在检查期间切换后端，
 旧后端的结果会被丢弃。native sing-box 的核心升级能力仍保持关闭。
 
-## 上游同步与发布
+## 上游同步与兼容性验证
 
-`.github/workflows/sync-upstream.yml` 每日运行并支持手动触发：只在 `main` 没有
-fork-only 分叉时 fast-forward 到 upstream/main；按 ancestry 判断 upstream 是否
-已经包含在 custom，已包含时成功 no-op，不创建空 PR。同步 PR 复用已有 PR，保留
-上游提交 ancestry；冲突留给维护者解决，不自动覆盖兼容代码。同步工作流显式
-dispatch `validate-sync.yml` 并确认运行已启动，因为 `GITHUB_TOKEN` 产生的事件
-不能可靠地触发后续 workflow。手工解决后运行 `pnpm install --frozen-lockfile`、
-`pnpm run type-check`、`pnpm run build` 和兼容性检查。
+`.github/workflows/sync-upstream.yml` 每日运行并支持手动触发；同步 PR 描述里的
+上游范围以 merge-base 计算，只列上游侧提交与文件。合并前后都由同一个
+`validate-sync.yml` 校验实际结果：locked install、type-check、非破坏性 lint、
+full/no-fonts 构建、兼容性测试、浏览器验收，以及官方 1.14.4 分发二进制的
+native endpoint 与浏览器验收。
 
-`validate-sync.yml` 始终校验 PR merge ref 的实际合并结果，覆盖 locked install、
-type-check、非破坏性 lint、full/no-fonts 构建、兼容性测试、浏览器验收，以及官方
-1.14.4 分发二进制的 native endpoint 与浏览器验收。
-
-经过审核的 `main → custom` 同步 PR 被手动合并后，`auto-release.yml` 只在确认
-merged、base=custom、head=main、且 merge commit 就是 custom HEAD 时，按
-`docs/DECISIONS.md` 的版本规则计算新标签，创建指向该 merge commit 的标签，并
-显式 dispatch `build-release.yml`。发布不早于合并，不来自 `main` 的同步本身，
-也不覆盖已有标签或 Release。分支与版本的权威规则见
-[the authoritative decisions](./DECISIONS.md)。
+分支角色、版本与故障恢复策略不在本文重复，见
+[the authoritative decisions](./DECISIONS.md)。手工解决冲突后运行
+`pnpm install --frozen-lockfile`、`pnpm run type-check`、`pnpm run build` 与兼容性检查。

@@ -41,12 +41,8 @@ Fork releases:
   [latest/no-fonts](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-no-fonts.zip)
   URLs resolve to the newest stable release.
 
-Each release includes `MANIFEST` and `SHA256SUMS`. Test builds are published as
-Actions artifacts or prereleases. Daily synchronization never publishes a
-stable release; a new fork Release is published only after a reviewed
-`main → custom` synchronization PR is merged. See
-[the authoritative decisions](./docs/DECISIONS.md) for branch, synchronization
-and versioning rules.
+Each release includes `MANIFEST` and `SHA256SUMS`. Branch roles, synchronization
+and release rules are documented in [docs/DECISIONS.md](./docs/DECISIONS.md).
 
 ## **Docker Setup**
 

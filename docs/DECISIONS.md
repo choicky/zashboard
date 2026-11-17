@@ -1,77 +1,64 @@
 # Authoritative decisions
 
-This file is the single source of truth for branch, synchronization and
-release decisions that are not derivable from code. Implementation details
-live in the workflows; this file records the rules they implement.
+One subject, one place. Workflows and scripts implement these rules; do not
+repeat them elsewhere.
 
-## Branches
+## Branch roles
 
-- `main` is a clean mirror of `Zephyruso/zashboard:main`. It carries no fork
-  commits and is never a release source.
-- `custom` is the maintained sing-box-compatible product branch and the only
-  fork release source. It is the repository's default branch.
-- Implementation happens on temporary branches and reaches `custom` only
-  through a reviewed PR. These roles are never reversed.
+- `main`: clean mirror of `Zephyruso/zashboard:main`; no fork commits; never a
+  release source.
+- `custom`: maintained sing-box-compatible product branch and only release
+  source; repository default branch.
+- Temporary branches: implementation only; merged into `custom` by reviewed PR.
 
 ## Synchronization
 
-The only supported flow is
-`Zephyruso/zashboard:main` → `choicky/zashboard:main` → PR `main → custom` →
-validation and review → manual merge → automatic fork Release.
+Flow: upstream `main` → fork `main` → PR `main → custom` → validation and
+review → manual merge → automatic fork Release.
 
-- Fast-forward `main` only when it is an ancestor of upstream `main`. A mirror
-  with fork-only commits or diverged history is a hard failure, never an
-  overwrite.
-- Upstream already contained in `custom` is a successful no-op.
-- Exactly one open `main → custom` PR is allowed. An existing PR is reused and
-  refreshed; duplicates are refused.
-- The PR is never merged automatically and upstream code is never pushed
-  directly into `custom`. Synchronizing `main` never publishes a Release.
+- Fast-forward fork `main` only when it is an ancestor of upstream `main`.
+  Divergence or fork-only commits are a hard failure, never an overwrite.
+- Upstream already in `custom` is a successful no-op. Keep exactly one open
+  `main → custom` PR; reuse and refresh it, refuse duplicates.
+- Never merge automatically, never push upstream code straight into `custom`,
+  and never publish from a `main` sync.
 
-## GITHUB_TOKEN event propagation
+## Merge and release boundaries
 
-Do not rely on a `GITHUB_TOKEN` side effect to start the next workflow.
+A release is created only for a PR that is merged, based on `custom`, with head
+`main` from the same repository, and whose merge commit is the current HEAD of
+`custom`. Validation of that exact commit must succeed first. Arbitrary pushes
+and unrelated PRs do not publish. Manual dispatch is limited to retrying an
+already-merged sync PR.
 
-- A PR created by `sync-upstream.yml` produced a `pull_request` run of
-  `validate-sync.yml`, but that run stopped at `action_required` with zero
-  jobs. The explicit `workflow_dispatch` of `validate-sync.yml` executed both
-  validation jobs successfully. The sync workflow therefore dispatches
-  validation itself and verifies the new run appeared.
-- A tag pushed with `GITHUB_TOKEN` must likewise not be assumed to start
-  `build-release.yml`. `auto-release.yml` dispatches `build-release.yml`
-  explicitly and verifies the new run appeared.
-- `workflow_dispatch` and `repository_dispatch` are the only events exempt
-  from `GITHUB_TOKEN` event suppression. No PAT is introduced for these
-  chains; workflow permissions are granted explicitly and per workflow.
+## Stable version selection
 
-## Fork release versioning
+Stable tags are exactly `sb-vMAJOR.MINOR.PATCH`; prereleases use suffixes.
+Base the version on the merge commit's `package.json`. If it is not greater than
+the highest existing stable tag, bump that tag's patch. Bump again on any tag
+collision. Never overwrite a tag or Release.
 
-Stable fork tags are exactly `sb-vMAJOR.MINOR.PATCH` so the dashboard's
-`parseReleaseTag` keeps treating them as stable. Prereleases use suffixes such
-as `-rcN` and `-phase2-rcN`.
+## Partial-failure recovery
 
-For each qualifying synchronization PR merge:
+One state decision per merge commit:
 
-1. Read the upstream-facing `package.json` version from the reviewed merge
-   commit as the base `MAJOR.MINOR.PATCH`.
-2. Collect every existing `sb-v*` tag and Release. Only exact stable tags
-   count towards the highest existing stable version.
-3. If the base version is greater than the highest existing stable version,
-   use it; otherwise bump the highest stable version's patch by one. This
-   keeps releases monotonic even when upstream does not change its version.
-4. If the resulting tag already exists as a tag or Release, bump the patch
-   again until it is free. Never overwrite a tag or Release.
+- No stable tag at the merge SHA: allocate one collision-free tag.
+- One stable tag at the merge SHA: reuse it, whether the Release is absent,
+  incomplete, or failed partway. Never allocate another version.
+- Several stable tags at the merge SHA: fail on inconsistent state.
+- Tag present but pointing at another SHA: fail; never overwrite.
+- Release complete with all required assets: idempotent no-op.
 
-The rule is implemented in `scripts/resolve-release-version.mjs` and tested in
-`test/auto-release.mjs`. It requires no manual tag calculation.
+Repeated runs after any intermediate failure converge on the same tag and
+Release.
 
-## Release trigger scope
+## Minimum workflow permissions
 
-Automatic publishing happens only for a PR that is merged, based on `custom`,
-with head `main` from the same repository, and whose reviewed merge commit is
-the current HEAD of `custom`. The tag points exactly at that commit.
+Grant only what a job uses, at the job level:
 
-Arbitrary pushes and unrelated PRs do not publish. `build-release.yml` keeps
-its existing tag-based and manual `workflow_dispatch` paths for test builds
-and explicit releases; `auto-release.yml` keeps a scoped `workflow_dispatch`
-with `pr_number` to retry an already-merged synchronization PR.
+- Validation: `contents: read`, `pull-requests: read`.
+- Sync PR creation: `contents: write`, `pull-requests: write`.
+- Tag creation and Release publication: `contents: write`.
+
+`workflow_call` gives callers the real result synchronously, so no workflow
+needs `actions: write` and no polling for another run's ID.
