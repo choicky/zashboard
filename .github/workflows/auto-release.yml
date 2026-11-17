@@ -84,6 +84,7 @@ jobs:
 
   decide:
     needs: [prepare, validate]
+    runs-on: ubuntu-latest
     outputs:
       decision: ${{ steps.state.outputs.decision }}
       tag: ${{ steps.state.outputs.tag }}
@@ -137,6 +138,7 @@ jobs:
     if: >-
       needs.decide.outputs.decision == 'create-tag' ||
       needs.decide.outputs.decision == 'publish'
+    runs-on: ubuntu-latest
     # Pushes tags, so it needs write access even though the workflow default
     # is read-only. No other job is broadened.
     permissions:
@@ -181,6 +183,7 @@ jobs:
   summary:
     needs: [prepare, decide, tag, publish]
     if: always()
+    runs-on: ubuntu-latest
     steps:
       - name: Job summary
         env:
