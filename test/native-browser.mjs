@@ -10,7 +10,6 @@ import { createMockServer } from './mock-server.mjs'
 const apiPort = Number(process.env.SINGBOX_API_PORT || 19092)
 const uiPort = Number(process.env.SINGBOX_UI_PORT || 19080)
 const secret = process.env.SINGBOX_SECRET || 'ci-native-secret'
-const apiUrl = `http://127.0.0.1:${apiPort}`
 
 const app = await serveDirectory(DIST_DIR, uiPort)
 const mock = await createMockServer({ groups: 2, nodes: 3, connections: 2 })

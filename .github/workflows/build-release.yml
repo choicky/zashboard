@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: fork-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -90,6 +94,7 @@ jobs:
           path: release
       - name: Assemble manifest and checksums
         run: |
+          set -euo pipefail
           find release -name '*.zip' -exec cp {} . \;
           {
             printf 'release_tag=%s\n' "$GITHUB_REF_NAME"
@@ -98,11 +103,50 @@ jobs:
             find . -maxdepth 1 -name 'zashboard-*.zip' -printf 'artifact=%f\n' | sort
           } > MANIFEST
           find . -maxdepth 1 -name 'zashboard-*.zip' -exec sha256sum {} \; | sort > SHA256SUMS
+          node scripts/verify-release-assets.mjs --dir .
       - uses: softprops/action-gh-release@v3
         with:
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-test') }}
+          make_latest: ${{ !contains(github.ref_name, '-rc') && !contains(github.ref_name, '-test') }}
           generate_release_notes: true
           files: |
             zashboard-*.zip
             MANIFEST
             SHA256SUMS
+      - name: Verify published assets and latest URLs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          for name in zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip MANIFEST SHA256SUMS; do
+            code=000
+            for _ in $(seq 1 5); do
+              code=$(curl -sSL -o "$RUNNER_TEMP/$name" -w '%{http_code}' "$base/$name" || true)
+              [ "$code" = 200 ] && break
+              sleep 5
+            done
+            test "$code" = 200 || { echo "asset $name is not downloadable" >&2; exit 1; }
+          done
+          (cd "$RUNNER_TEMP" && sha256sum -c "$GITHUB_WORKSPACE/SHA256SUMS")
+          if [[ ! "$GITHUB_REF_NAME" =~ -rc|-test ]]; then
+            for name in zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip; do
+              code=$(curl -sSL -o /dev/null -w '%{http_code}' \
+                "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/$name")
+              test "$code" = 200 || { echo "latest/download/$name did not resolve" >&2; exit 1; }
+            done
+          fi
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            printf '## Fork release\n\n'
+            printf '| Item | Value |\n| --- | --- |\n'
+            printf '| Tag | `%s` |\n' "$GITHUB_REF_NAME"
+            printf '| Source SHA | `%s` |\n' "$GITHUB_SHA"
+            for name in zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip MANIFEST SHA256SUMS; do
+              if [ -f "$name" ]; then
+                printf '| %s | %s bytes | `%s` |\n' "$name" "$(stat -c%s "$name")" "$(sha256sum "$name" | cut -d' ' -f1)"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

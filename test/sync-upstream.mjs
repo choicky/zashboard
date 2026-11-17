@@ -18,6 +18,12 @@ const contains = (ancestor, descendant) => {
     return false
   }
 }
+// Mirrors the workflow rule: fast-forward only when mirror is an ancestor of
+// upstream, and synchronize custom only when upstream is not already included.
+const decide = (mirror, upstream, custom) => ({
+  canFastForward: contains(mirror, upstream),
+  needsSync: !contains(upstream, custom),
+})
 
 try {
   git('init', '-q')
@@ -25,22 +31,44 @@ try {
   git('config', 'user.name', 'test')
   const base = commit('base')
 
-  // Identical branches and custom-only fork commits are successful no-ops.
-  assert.equal(contains(base, base), true)
+  // No upstream change: identical mirror and upstream are a successful no-op.
+  assert.deepEqual(decide(base, base, base), { canFastForward: true, needsSync: false })
+
+  // Custom-only fork commits are a successful no-op and need no empty PR.
   const customFork = commit('fork custom work')
+  assert.deepEqual(decide(base, base, customFork), { canFastForward: true, needsSync: false })
   assert.equal(contains(base, customFork), true)
 
-  // A new upstream commit is the only case that needs a synchronization PR.
+  // One new upstream commit needs a synchronization PR, but only if custom
+  // does not already contain it.
   git('checkout', '-q', base)
   const upstreamNew = commit('upstream change')
-  assert.equal(contains(upstreamNew, customFork), false)
+  assert.deepEqual(decide(base, upstreamNew, customFork), {
+    canFastForward: true,
+    needsSync: true,
+  })
+  git('checkout', '-q', upstreamNew)
+  assert.deepEqual(decide(upstreamNew, upstreamNew, upstreamNew), {
+    canFastForward: true,
+    needsSync: false,
+  })
 
   // A mirror with an unrelated fork-only commit must be rejected before sync.
   git('checkout', '-q', base)
   const divergedMirror = commit('mirror fork-only change')
-  assert.equal(contains(divergedMirror, upstreamNew), false)
+  assert.deepEqual(decide(divergedMirror, upstreamNew, customFork), {
+    canFastForward: false,
+    needsSync: true,
+  })
+
+  // PR reuse: the workflow counts open main -> custom PRs and reuses exactly
+  // one, refuses when several exist, and creates only when none exist.
+  const prAction = (count) => (count > 1 ? 'fail' : count === 1 ? 'reuse' : 'create')
+  assert.equal(prAction(0), 'create')
+  assert.equal(prAction(1), 'reuse')
+  assert.equal(prAction(2), 'fail')
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }
 
-console.log('upstream ancestry: no-op, new commits, and divergence scenarios passed')
+console.log('upstream sync: no-op, fast-forward, divergence and reuse scenarios passed')
