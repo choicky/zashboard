@@ -131,7 +131,7 @@ jobs:
             printf 'artifact=zashboard-singbox-full.zip\n'
             printf 'artifact=zashboard-singbox-no-fonts.zip\n'
           } > MANIFEST
-          find . -maxdepth 1 -name 'zashboard-*.zip' -exec sha256sum {} \; | sort > SHA256SUMS
+          sha256sum zashboard-singbox-full.zip zashboard-singbox-no-fonts.zip > SHA256SUMS
           node scripts/verify-release-assets.mjs --dir . --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
       - name: Publish (idempotent on the same tag)
         id: publish

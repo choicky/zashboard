@@ -55,14 +55,14 @@ jobs:
           set -euo pipefail
           test -n "$PR_NUMBER"
           gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --json number,merged,baseRefName,headRefName,headRepository,mergeCommit,url \
+            --json number,state,baseRefName,headRefName,headRepository,mergeCommit,url \
             > "$RUNNER_TEMP/pr.json"
           pr="$RUNNER_TEMP/pr.json"
           merge_sha=$(jq -r '.mergeCommit.oid // empty' "$pr")
           test -n "$merge_sha" || { echo 'PR has no merge commit' >&2; exit 1; }
           {
             echo "number=$(jq -r .number "$pr")"
-            echo "merged=$(jq -r .merged "$pr")"
+            echo "merged=$(jq -r '.state == "MERGED"' "$pr")"
             echo "base=$(jq -r .baseRefName "$pr")"
             echo "head=$(jq -r .headRefName "$pr")"
             echo "head_repo=$(jq -r '.headRepository.nameWithOwner // empty' "$pr")"
@@ -84,6 +84,7 @@ jobs:
 
   decide:
     needs: [prepare, validate]
+    runs-on: ubuntu-latest
     outputs:
       decision: ${{ steps.state.outputs.decision }}
       tag: ${{ steps.state.outputs.tag }}
@@ -137,6 +138,7 @@ jobs:
     if: >-
       needs.decide.outputs.decision == 'create-tag' ||
       needs.decide.outputs.decision == 'publish'
+    runs-on: ubuntu-latest
     # Pushes tags, so it needs write access even though the workflow default
     # is read-only. No other job is broadened.
     permissions:
@@ -181,6 +183,7 @@ jobs:
   summary:
     needs: [prepare, decide, tag, publish]
     if: always()
+    runs-on: ubuntu-latest
     steps:
       - name: Job summary
         env:

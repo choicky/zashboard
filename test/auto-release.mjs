@@ -243,6 +243,28 @@ try {
   const publishJob = autoRelease.slice(autoRelease.indexOf('  publish:\n'))
   assert.match(publishJob, /permissions:\n      contents: write/)
 
+  // Ordinary jobs need a runner; reusable-workflow call jobs must not have one.
+  const job = (name) =>
+    autoRelease.slice(autoRelease.indexOf(`\n  ${name}:\n`)).split(/\n  \w+:\n/)[1]
+  for (const name of ['decide', 'tag', 'summary']) {
+    assert.match(job(name), /^    runs-on: ubuntu-latest$/m, name)
+  }
+  for (const name of ['decide', 'summary']) assert.doesNotMatch(job(name), /permissions:/, name)
+  for (const name of ['validate', 'publish']) {
+    assert.match(job(name), /^    uses: \.\/\.github\/workflows\//m, name)
+    assert.doesNotMatch(job(name), /runs-on:|steps:/, name)
+  }
+
+  // gh pr view has no `merged` JSON field; merge status derives from `state`.
+  assert.match(autoRelease, /--json number,state,/)
+  assert.match(autoRelease, /merged=\$\(jq -r '\.state == "MERGED"'/)
+
+  // The workflow's own checksum command must produce what the verifier accepts.
+  const sumsCommand = /^ *(.*[^>]> SHA256SUMS)$/m.exec(buildRelease)[1]
+  writeBundle()
+  execFileSync('bash', ['-c', sumsCommand], { cwd: bundle })
+  assert.match(node('scripts/verify-release-assets.mjs', args), /verified/)
+
   // Provenance is fail-closed: missing/invalid tags and SHA mismatch abort.
   const provenance = buildRelease.slice(
     buildRelease.indexOf('name: Enforce release provenance'),
