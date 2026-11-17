@@ -259,6 +259,12 @@ try {
   assert.match(autoRelease, /--json number,state,/)
   assert.match(autoRelease, /merged=\$\(jq -r '\.state == "MERGED"'/)
 
+  // The workflow's own checksum command must produce what the verifier accepts.
+  const sumsCommand = /^ *(.*[^>]> SHA256SUMS)$/m.exec(buildRelease)[1]
+  writeBundle()
+  execFileSync('bash', ['-c', sumsCommand], { cwd: bundle })
+  assert.match(node('scripts/verify-release-assets.mjs', args), /verified/)
+
   // Provenance is fail-closed: missing/invalid tags and SHA mismatch abort.
   const provenance = buildRelease.slice(
     buildRelease.indexOf('name: Enforce release provenance'),
