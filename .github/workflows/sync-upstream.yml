@@ -79,10 +79,33 @@ jobs:
         if: steps.compare.outputs.needs_sync == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OLD_MAIN: ${{ steps.compare.outputs.old_main }}
           UPSTREAM_SHA: ${{ steps.compare.outputs.upstream_sha }}
         run: |
           set -euo pipefail
+
+          # The relevant range is what custom does not contain yet. main may
+          # already be fast-forwarded when this workflow runs, so an
+          # old-main..new-main range would be empty and misleading.
+          range="origin/custom..$UPSTREAM_SHA"
+          changed=$(git diff --name-only "$range" || true)
+          sensitive=$(printf '%s\n' "$changed" | grep -Ei 'sing.?box|src/gen/|vendor/|backend|api|assembly|proto' || true)
+          {
+            printf '## Upstream synchronization\n\n'
+            printf 'Upstream range: `%s`\n\n' "$range"
+            printf '### Upstream commits\n\n```\n'
+            git log --oneline --no-merges "$range" || true
+            printf '\n```\n\n'
+            printf '### Changed files\n\n```\n%s\n```\n\n' "$changed"
+            printf '### sing-box-sensitive files\n\n```\n%s\n```\n\n' "${sensitive:-none detected}"
+            printf '### Validation status\n\n'
+            printf 'Automated validation runs for the exact PR merge result in\n'
+            printf '`Validate synchronization result`. Review its result before merging.\n\n'
+            printf '### Unresolved risks\n\n'
+            printf 'Upstream changes may overlap restored sing-box compatibility code. Check the\n'
+            printf 'Clash API and native gRPC-Web results; Git reporting no conflicts is not approval.\n\n'
+            printf '> A successful build or clean merge does **not** authorize merging this PR.\n'
+            printf '> Review the diff, validation results and sing-box compatibility before merging.\n'
+          } > "$RUNNER_TEMP/pr-body.md"
 
           if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/custom)" ]; then
             echo 'main is already incorporated into custom; no PR needed' >> "$GITHUB_STEP_SUMMARY"
@@ -101,33 +124,16 @@ jobs:
           if [ "$count" -eq 1 ]; then
             number=$(printf '%s' "$existing" | jq -r '.[0].number')
             url=$(printf '%s' "$existing" | jq -r '.[0].url')
+            if ! gh pr edit "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/pr-body.md"; then
+              echo 'GitHub could not refresh the existing synchronization PR' >&2
+              echo 'failure_reason=GitHub could not refresh the synchronization PR' >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
             echo "number=$number" >> "$GITHUB_OUTPUT"
             echo "url=$url" >> "$GITHUB_OUTPUT"
             echo 'action=reused' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          range="$OLD_MAIN..$UPSTREAM_SHA"
-          git fetch origin main
-          changed=$(git diff --name-only "$range" || true)
-          sensitive=$(printf '%s\n' "$changed" | grep -Ei 'sing.?box|src/gen/|vendor/|backend|api|assembly|proto' || true)
-          {
-            printf '## Upstream synchronization\n\n'
-            printf 'Upstream range: `%s`\n\n' "$range"
-            printf '### Upstream commits\n\n```\n'
-            git log --oneline --no-merges "$range" || true
-            printf '\n```\n\n'
-            printf '### Changed files\n\n```\n%s\n```\n\n' "$changed"
-            printf '### sing-box-sensitive files\n\n```\n%s\n```\n\n' "${sensitive:-none detected}"
-            printf '### Validation status\n\n'
-            printf 'Automated validation is dispatched to `Validate synchronization result`\n'
-            printf 'for the exact PR merge result. Review its result before merging.\n\n'
-            printf '### Unresolved risks\n\n'
-            printf 'Upstream changes may overlap restored sing-box compatibility code. Check the\n'
-            printf 'Clash API and native gRPC-Web results; Git reporting no conflicts is not approval.\n\n'
-            printf '> A successful build or clean merge does **not** authorize merging this PR.\n'
-            printf '> Review the diff, validation results and sing-box compatibility before merging.\n'
-          } > "$RUNNER_TEMP/pr-body.md"
 
           if ! url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base custom --head main \
             --title 'chore: sync upstream main' --body-file "$RUNNER_TEMP/pr-body.md"); then
@@ -142,9 +148,11 @@ jobs:
 
       - name: Dispatch validation for the exact PR
         id: dispatch
-        # Events created with GITHUB_TOKEN do not trigger other workflows,
-        # except workflow_dispatch and repository_dispatch. Dispatch explicitly
-        # so the sync PR is actually validated.
+        # A PR created with GITHUB_TOKEN may produce a pull_request run, but in
+        # this repository that run stops at `action_required` with zero jobs.
+        # workflow_dispatch is exempt from GITHUB_TOKEN event suppression and
+        # was observed to execute both validation jobs, so dispatch explicitly
+        # and verify the new run actually appears.
         if: steps.pr.outputs.number != '' && steps.pr.outputs.failure_reason == ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
