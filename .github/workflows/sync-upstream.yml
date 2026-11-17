@@ -26,9 +26,11 @@ jobs:
       pr_number: ${{ steps.pr.outputs.number }}
       upstream_sha: ${{ steps.compare.outputs.upstream_sha }}
     steps:
+      # Check out the workflow's own ref: it holds the scripts used below.
+      # `main` is an upstream mirror and must not be the working tree.
       - uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ github.ref }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -36,15 +38,15 @@ jobs:
         id: compare
         run: |
           set -euo pipefail
-          old_main=$(git rev-parse HEAD)
           if ! git remote get-url upstream >/dev/null 2>&1; then
             git remote add upstream https://github.com/Zephyruso/zashboard.git
           fi
-          git fetch origin custom
+          git fetch origin main custom
           git fetch upstream main
+          old_main=$(git rev-parse origin/main)
           upstream_sha=$(git rev-parse upstream/main)
 
-          if ! git merge-base --is-ancestor HEAD upstream/main; then
+          if ! git merge-base --is-ancestor origin/main upstream/main; then
             echo 'main has fork-only commits or has diverged; refusing overwrite' >&2
             echo 'failure_reason=main has fork-only commits or has diverged from upstream' >> "$GITHUB_OUTPUT"
             exit 1
@@ -54,13 +56,12 @@ jobs:
           # contains upstream/main, this is a successful no-op for custom and
           # must not create a duplicate synchronization PR.
           if [ "$old_main" != "$upstream_sha" ]; then
-            git merge --ff-only upstream/main
-            git push origin HEAD:main
+            git push origin "upstream/main:refs/heads/main"
             main_changed=true
           else
             main_changed=false
           fi
-          new_main=$(git rev-parse HEAD)
+          new_main=$upstream_sha
 
           if git merge-base --is-ancestor upstream/main origin/custom; then
             needs_sync=false
@@ -106,7 +107,7 @@ jobs:
             printf '> Review the diff, validation results and sing-box compatibility before merging.\n'
           } > "$RUNNER_TEMP/pr-body.md"
 
-          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/custom)" ]; then
+          if [ "$(git rev-parse origin/main)" = "$(git rev-parse origin/custom)" ]; then
             echo 'main is already incorporated into custom; no PR needed' >> "$GITHUB_STEP_SUMMARY"
             echo 'action=none' >> "$GITHUB_OUTPUT"
             exit 0
