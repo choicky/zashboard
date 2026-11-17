@@ -96,7 +96,6 @@ jobs:
       - name: Enforce eligibility and decide recovery state
         id: state
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
           PR_MERGED: ${{ needs.prepare.outputs.merged }}
@@ -117,11 +116,9 @@ jobs:
           base_version=$(git show "$MERGE_SHA:package.json" | jq -r .version)
           git fetch origin --tags --prune
           tags=$(node scripts/release-state.mjs --repo .)
-          releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq 'map({tagName: .tag_name, assets: [.assets[].name]})')
 
           jq -n \
-            --argjson tags "$tags" --argjson releases "$releases" \
+            --argjson tags "$tags" \
             --arg mergeSha "$MERGE_SHA" --arg baseVersion "$base_version" \
             '{mergeSha:$mergeSha, baseVersion:$baseVersion, tags:$tags}' \
             > "$RUNNER_TEMP/release-state.json"
@@ -140,6 +137,10 @@ jobs:
     if: >-
       needs.decide.outputs.decision == 'create-tag' ||
       needs.decide.outputs.decision == 'publish'
+    # Pushes tags, so it needs write access even though the workflow default
+    # is read-only. No other job is broadened.
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.prepare_tag.outputs.tag }}
     steps:

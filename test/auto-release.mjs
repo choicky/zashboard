@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -227,6 +227,34 @@ try {
   assert.equal(fails('scripts/verify-release-assets.mjs', args), true)
   writeBundle({ zipOverride: { full: Buffer.from('not a zip') } })
   assert.equal(fails('scripts/verify-release-assets.mjs', args), true)
+
+  // --- structural checks on the workflow sources (no parser needed) ---
+  const readWorkflow = (name) => readFileSync(join(root, '.github', 'workflows', name), 'utf8')
+  const autoRelease = readWorkflow('auto-release.yml')
+  const buildRelease = readWorkflow('build-release.yml')
+
+  // Workflow default stays read-only; only the tag/publish jobs escalate.
+  assert.match(autoRelease, /permissions:\n  contents: read\n  pull-requests: read/)
+  const tagJob = autoRelease.slice(
+    autoRelease.indexOf('  tag:\n'),
+    autoRelease.indexOf('  publish:\n'),
+  )
+  assert.match(tagJob, /permissions:\n      contents: write/)
+  const publishJob = autoRelease.slice(autoRelease.indexOf('  publish:\n'))
+  assert.match(publishJob, /permissions:\n      contents: write/)
+
+  // Provenance is fail-closed: missing/invalid tags and SHA mismatch abort.
+  const provenance = buildRelease.slice(
+    buildRelease.indexOf('name: Enforce release provenance'),
+    buildRelease.indexOf('uses: actions/download-artifact@v8'),
+  )
+  assert.match(provenance, /git rev-parse --verify "refs\/tags\/\$RELEASE_TAG\^\{\}"/)
+  assert.match(provenance, /test "\$resolved" = "\$RELEASE_SHA"/)
+  assert.match(provenance, /exit 1/)
+
+  // Removed logic has not returned.
+  assert.doesNotMatch(autoRelease, /releases=\$\(gh api|argjson releases|VALIDATED|VALIDATION_SHA/)
+  assert.doesNotMatch(buildRelease, /Manual dev builds have no tag and skip/)
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

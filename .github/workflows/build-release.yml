@@ -102,18 +102,21 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - name: Enforce release provenance
+        # This job only runs for a real release tag. The tag must already exist
+        # and resolve exactly to the reviewed source commit; a missing tag,
+        # invalid tag, or any SHA mismatch fails. Publication must not create
+        # the tag implicitly.
         run: |
           set -euo pipefail
           git fetch origin --tags --prune
-          # One provenance rule: the resolved tag commit must be the reviewed
-          # source. Manual dev builds have no tag and skip this check.
-          if git rev-parse --verify -q "refs/tags/$RELEASE_TAG" >/dev/null; then
-            resolved=$(git rev-parse "$RELEASE_TAG^{}")
-            test "$resolved" = "$RELEASE_SHA" || {
-              echo "tag $RELEASE_TAG resolves to $resolved, expected $RELEASE_SHA" >&2
-              exit 1
-            }
-          fi
+          resolved=$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{}" 2>/dev/null) || {
+            echo "release tag $RELEASE_TAG is missing or invalid" >&2
+            exit 1
+          }
+          test "$resolved" = "$RELEASE_SHA" || {
+            echo "tag $RELEASE_TAG resolves to $resolved, expected $RELEASE_SHA" >&2
+            exit 1
+          }
       - uses: actions/download-artifact@v8
         with:
           path: release
