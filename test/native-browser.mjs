@@ -3,20 +3,17 @@ import assert from 'node:assert/strict'
 import { connectBrowser, waitFor } from './lib/cdp.mjs'
 import { launchChrome } from './lib/chrome.mjs'
 import { DIST_DIR } from './lib/harness.mjs'
-import { findFreePort } from './lib/ports.mjs'
 import { serveDirectory } from './lib/static-server.mjs'
 import { createMockServer } from './mock-server.mjs'
 
 const apiPort = Number(process.env.SINGBOX_API_PORT || 19092)
 const uiPort = Number(process.env.SINGBOX_UI_PORT || 19080)
 const secret = process.env.SINGBOX_SECRET || 'ci-native-secret'
-const apiUrl = `http://127.0.0.1:${apiPort}`
 
 const app = await serveDirectory(DIST_DIR, uiPort)
 const mock = await createMockServer({ groups: 2, nodes: 3, connections: 2 })
-const debuggingPort = await findFreePort()
-const chrome = await launchChrome({ port: debuggingPort, headless: true })
-const browser = await connectBrowser(debuggingPort)
+const chrome = await launchChrome({ headless: true })
+const browser = await connectBrowser(chrome.port)
 
 try {
   const page = await browser.newPage()

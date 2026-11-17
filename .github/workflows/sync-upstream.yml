@@ -9,44 +9,184 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+# `gh` resolves the repository from local git remotes. The Fast-forward step
+# adds an `upstream` remote pointing at Zephyruso/zashboard, so every `gh`
+# command in this workflow must be pinned to the fork repository explicitly.
+env:
+  GH_REPO: ${{ github.repository }}
+
 jobs:
   sync:
     runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      upstream_sha: ${{ steps.compare.outputs.upstream_sha }}
     steps:
+      # Check out the workflow's own ref: it holds the scripts used below.
+      # `main` is an upstream mirror and must not be the working tree.
       - uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ github.ref }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Fast-forward main from upstream
         id: compare
         run: |
-          git remote add upstream https://github.com/Zephyruso/zashboard.git
-          git fetch origin custom
+          set -euo pipefail
+          if ! git remote get-url upstream >/dev/null 2>&1; then
+            git remote add upstream https://github.com/Zephyruso/zashboard.git
+          fi
+          git fetch origin main custom
           git fetch upstream main
-          if ! git merge-base --is-ancestor HEAD upstream/main; then
+          old_main=$(git rev-parse origin/main)
+          upstream_sha=$(git rev-parse upstream/main)
+
+          if ! git merge-base --is-ancestor origin/main upstream/main; then
             echo 'main has fork-only commits or has diverged; refusing overwrite' >&2
+            echo 'failure_reason=main has fork-only commits or has diverged from upstream' >> "$GITHUB_OUTPUT"
             exit 1
           fi
+
           # Fast-forward the mirror whenever possible. If custom already
           # contains upstream/main, this is a successful no-op for custom and
           # must not create a duplicate synchronization PR.
-          if [ "$(git rev-parse HEAD)" != "$(git rev-parse upstream/main)" ]; then
-            git merge --ff-only upstream/main
-            git push origin HEAD:main
-          fi
-          if git merge-base --is-ancestor upstream/main origin/custom; then
-            echo 'custom already incorporates upstream/main; synchronization is complete'
-            echo 'needs_sync=false' >> "$GITHUB_OUTPUT"
+          if [ "$old_main" != "$upstream_sha" ]; then
+            git push origin "upstream/main:refs/heads/main"
+            main_changed=true
           else
-            echo 'needs_sync=true' >> "$GITHUB_OUTPUT"
+            main_changed=false
           fi
-      - name: Open one reusable custom synchronization PR
+          new_main=$upstream_sha
+
+          if git merge-base --is-ancestor upstream/main origin/custom; then
+            needs_sync=false
+          else
+            needs_sync=true
+          fi
+
+          {
+            echo "old_main=$old_main"
+            echo "new_main=$new_main"
+            echo "upstream_sha=$upstream_sha"
+            echo "main_changed=$main_changed"
+            echo "needs_sync=$needs_sync"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open or reuse one synchronization PR
+        id: pr
         if: steps.compare.outputs.needs_sync == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/custom)" ]; then exit 0; fi
-          gh pr list --base custom --head main --state open --json number --jq 'length' | grep -qx 0 || exit 0
-          gh pr create --base custom --head main --title 'chore: sync upstream main' \
-            --body 'Automated upstream synchronization. Resolve conflicts deliberately; compatibility changes stay on custom.'
+          set -euo pipefail
+          range_json=$(node scripts/upstream-range.mjs \
+            --repo "$GITHUB_WORKSPACE" --custom origin/custom --upstream upstream/main)
+          range=$(printf '%s' "$range_json" | jq -r .range)
+          commits=$(printf '%s' "$range_json" | jq -r .commits)
+          changed=$(printf '%s' "$range_json" | jq -r '.files[]' || true)
+          sensitive=$(printf '%s' "$range_json" | jq -r '.sensitive | if length == 0 then "none detected" else join("\n") end')
+          log=$(printf '%s' "$range_json" | jq -r '.log[]' || true)
+          {
+            printf '## Upstream synchronization\n\n'
+            printf 'Upstream-only range: `%s` (from merge base, %s commits)\n\n' "$range" "$commits"
+            printf '### Upstream commits\n\n```\n%s\n```\n\n' "$log"
+            printf '### Changed files (upstream side only)\n\n```\n%s\n```\n\n' "$changed"
+            printf '### sing-box-sensitive files\n\n```\n%s\n```\n\n' "$sensitive"
+            printf '### Validation status\n\n'
+            printf '`Validate synchronization result` runs on this exact merge result and\n'
+            printf 'must succeed before this PR may be merged. Review its result.\n\n'
+            printf '### Unresolved risks\n\n'
+            printf 'Upstream changes may overlap restored sing-box compatibility code. Check the\n'
+            printf 'Clash API and native gRPC-Web results; Git reporting no conflicts is not approval.\n\n'
+            printf '> A successful build or clean merge does **not** authorize merging this PR.\n'
+            printf '> Review the diff, validation results and sing-box compatibility before merging.\n'
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          if [ "$(git rev-parse origin/main)" = "$(git rev-parse origin/custom)" ]; then
+            echo 'main is already incorporated into custom; no PR needed' >> "$GITHUB_STEP_SUMMARY"
+            echo 'action=none' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base custom --head main \
+            --state open --json number,url)
+          count=$(printf '%s' "$existing" | jq 'length')
+          if [ "$count" -gt 1 ]; then
+            echo 'more than one open main -> custom PR exists; refusing to create another' >&2
+            echo 'failure_reason=multiple open synchronization PRs' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          if [ "$count" -eq 1 ]; then
+            number=$(printf '%s' "$existing" | jq -r '.[0].number')
+            url=$(printf '%s' "$existing" | jq -r '.[0].url')
+            if ! gh pr edit "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/pr-body.md"; then
+              echo 'GitHub could not refresh the existing synchronization PR' >&2
+              echo 'failure_reason=GitHub could not refresh the synchronization PR' >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            echo "number=$number" >> "$GITHUB_OUTPUT"
+            echo "url=$url" >> "$GITHUB_OUTPUT"
+            echo 'action=reused' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base custom --head main \
+            --title 'chore: sync upstream main' --body-file "$RUNNER_TEMP/pr-body.md"); then
+            echo 'GitHub could not create the main -> custom PR' >&2
+            echo 'failure_reason=GitHub could not create the synchronization PR' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          number=$(gh pr view "$url" --repo "$GITHUB_REPOSITORY" --json number --jq .number)
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo 'action=created' >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        if: always()
+        env:
+          OLD_MAIN: ${{ steps.compare.outputs.old_main }}
+          NEW_MAIN: ${{ steps.compare.outputs.new_main }}
+          UPSTREAM_SHA: ${{ steps.compare.outputs.upstream_sha }}
+          MAIN_CHANGED: ${{ steps.compare.outputs.main_changed }}
+          NEEDS_SYNC: ${{ steps.compare.outputs.needs_sync }}
+          FAIL_COMPARE: ${{ steps.compare.outputs.failure_reason }}
+          PR_ACTION: ${{ steps.pr.outputs.action }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          FAIL_PR: ${{ steps.pr.outputs.failure_reason }}
+        run: |
+          {
+            printf '## Upstream synchronization\n\n'
+            printf '| Item | Value |\n| --- | --- |\n'
+            printf '| Old main SHA | `%s` |\n' "${OLD_MAIN:-n/a}"
+            printf '| New main SHA | `%s` |\n' "${NEW_MAIN:-n/a}"
+            printf '| Upstream SHA | `%s` |\n' "${UPSTREAM_SHA:-n/a}"
+            printf '| Main changed | `%s` |\n' "${MAIN_CHANGED:-n/a}"
+            printf '| Custom needs sync | `%s` |\n' "${NEEDS_SYNC:-n/a}"
+            printf '| PR action | `%s` |\n' "${PR_ACTION:-n/a}"
+            printf '| PR number | `%s` |\n' "${PR_NUMBER:-n/a}"
+            printf '| PR URL | %s |\n' "${PR_URL:-n/a}"
+            printf '\n'
+            reason="${FAIL_COMPARE:-$FAIL_PR}"
+            if [ -n "$reason" ]; then
+              printf '**Failure reason:** %s\n' "$reason"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Synchronous reusable call: the caller fails if any validation job fails,
+  # so a sync run can never succeed while its PR is unvalidated.
+  validate:
+    needs: sync
+    if: needs.sync.outputs.pr_number != ''
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/validate-sync.yml
+    with:
+      pr_number: ${{ needs.sync.outputs.pr_number }}
+      expected_head: ${{ needs.sync.outputs.upstream_sha }}

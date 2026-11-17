@@ -33,17 +33,16 @@ You can download the zashboard files here:
 
 Fork releases:
 
-- Current prerelease `sb-v3.30.0-phase2-rc7` (fixed tag; not stable/latest):
-  [full](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-phase2-rc7/zashboard-singbox-full.zip) and
-  [no-fonts](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-phase2-rc7/zashboard-singbox-no-fonts.zip).
-- Future stable releases will use the moving
+- Current stable `sb-v3.30.0`:
+  [full](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0/zashboard-singbox-full.zip) and
+  [no-fonts](https://github.com/choicky/zashboard/releases/download/sb-v3.30.0/zashboard-singbox-no-fonts.zip).
+- The moving
   [latest/full](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-full.zip) and
   [latest/no-fonts](https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-no-fonts.zip)
-  URLs only after a stable release exists.
+  URLs resolve to the newest stable release.
 
-Each release includes `MANIFEST` and `SHA256SUMS`. Test builds are published as
-Actions artifacts or prereleases; daily synchronization never publishes a
-stable release.
+Each release includes `MANIFEST` and `SHA256SUMS`. Branch roles, synchronization
+and release rules are documented in [docs/DECISIONS.md](./docs/DECISIONS.md).
 
 ## **Docker Setup**
 
@@ -105,7 +104,7 @@ For example, with this mihomo configuration on remote server `192.168.1.1`:
 
 ```yaml
 external-ui: ui
-external-ui-url: https://github.com/choicky/zashboard/releases/download/sb-v3.30.0-phase2-rc7/zashboard-singbox-full.zip
+external-ui-url: https://github.com/choicky/zashboard/releases/download/sb-v3.30.0/zashboard-singbox-full.zip
 external-controller: 0.0.0.0:9090
 secret: ''
 ```

@@ -4,7 +4,6 @@ import { createServer } from 'node:http'
 import { connectBrowser, sleep, waitFor } from './lib/cdp.mjs'
 import { launchChrome } from './lib/chrome.mjs'
 import { DIST_DIR } from './lib/harness.mjs'
-import { findFreePort } from './lib/ports.mjs'
 import { serveDirectory } from './lib/static-server.mjs'
 import { createMockServer } from './mock-server.mjs'
 
@@ -79,12 +78,10 @@ const listen = (server) =>
 const originPort = String(await listen(originServer))
 const localPort = await listen(localServer)
 const origin = `http://127.0.0.1:${originPort}`
-const debuggingPort = await findFreePort()
 const chrome = await launchChrome({
-  port: debuggingPort,
   args: [`--host-resolver-rules=MAP 127.0.0.1:9090 127.0.0.1:${localPort}`],
 })
-const browser = await connectBrowser(debuggingPort)
+const browser = await connectBrowser(chrome.port)
 
 const savedBackend = {
   uuid: 'saved',
