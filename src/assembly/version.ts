@@ -140,7 +140,7 @@ const probeBackendVersion = async (backend: Backend) => {
   setTimeout(() => void checkUIUpdate(), 0)
 
   // Page load, backend switch and reconnects may reuse a recent answer.
-  checkCoreUpdate()
+  void checkCoreUpdate()
 }
 
 const CORE_UPDATE_INTERVAL = 30 * 60 * 1000
@@ -155,10 +155,13 @@ const clearCoreUpdate = () => {
 // One entry for every trigger: probe, enabling the setting, and the periodic
 // timer. Only the newest check for the current backend may publish a result.
 // `fresh` bypasses the local cache so an explicit or periodic check really
-// asks GitHub again.
-export const checkCoreUpdate = ({ fresh = false } = {}) => {
+// asks GitHub again, and first re-reads the installed version: the core may
+// have been upgraded (on the host, or by an automatic mihomo upgrade) while
+// the page stayed open, and comparing a stale version would keep reporting,
+// or re-triggering, an update that is already installed.
+export const checkCoreUpdate = async ({ fresh = false } = {}) => {
   const backend = activeBackend.value
-  const versionString = version.value
+  let versionString = version.value
   if (
     !backend ||
     !versionString ||
@@ -181,6 +184,21 @@ export const checkCoreUpdate = ({ fresh = false } = {}) => {
   const publish = (status: CoreUpdateStatus | undefined) => {
     coreUpdateStatus.value = status
     isCoreUpdateAvailable.value = status?.state === 'update'
+  }
+
+  if (fresh) {
+    try {
+      const installed = await driver().system.fetchVersion()
+      if (!isCurrent()) return
+      if (installed && installed !== versionString) {
+        versionString = installed
+        version.value = installed
+      }
+    } catch {
+      // Core unreachable right now: do not compare a possibly stale version.
+      if (isCurrent()) publish(undefined)
+      return
+    }
   }
 
   if (can('coreUpdateNotice')) {
@@ -215,12 +233,12 @@ export const checkCoreUpdate = ({ fresh = false } = {}) => {
 // Enabling the setting checks at once; disabling it clears any result.
 watch(checkUpgradeCore, (enabled, wasEnabled) => {
   if (!enabled) clearCoreUpdate()
-  else if (!wasEnabled) checkCoreUpdate({ fresh: true })
+  else if (!wasEnabled) void checkCoreUpdate({ fresh: true })
 })
 
 // While the page stays open, check again every 30 minutes (bypassing the cache).
 if (typeof window !== 'undefined') {
-  window.setInterval(() => checkCoreUpdate({ fresh: true }), CORE_UPDATE_INTERVAL)
+  window.setInterval(() => void checkCoreUpdate({ fresh: true }), CORE_UPDATE_INTERVAL)
 }
 
 let probe: Promise<void> = Promise.resolve()
