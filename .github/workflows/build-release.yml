@@ -1,11 +1,10 @@
 name: Fork build and release
 
 on:
-  push:
-    tags: ['sb-v*']
-  workflow_dispatch:
-  # Single implementation of package construction and publication. Callers
-  # wait for its real result and pass the exact tag/source SHA explicitly.
+  # Single implementation of package construction and publication, reachable
+  # only from auto-release after validation, eligibility and tag provenance.
+  # There is deliberately no tag-push or manual entry: those would publish
+  # without validation. To retry a release, re-run auto-release with the PR.
   workflow_call:
     inputs:
       tag:
@@ -25,17 +24,14 @@ on:
 permissions:
   contents: write
 
-# A push to custom only produced a second, unreferenced dev artifact: PR
-# validation already builds both font modes, and publication builds the exact
-# tag/source below. Keep tag pushes, manual dispatch and reusable calls.
 concurrency:
-  group: fork-release-${{ inputs.tag || github.ref }}
+  group: fork-release-${{ inputs.tag }}
   cancel-in-progress: false
 
 env:
   GH_REPO: ${{ github.repository }}
-  RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/sb-v') && github.ref_name || format('sb-v0.0.0-dev.{0}', github.sha)) }}
-  RELEASE_SHA: ${{ inputs.source_sha || github.sha }}
+  RELEASE_TAG: ${{ inputs.tag }}
+  RELEASE_SHA: ${{ inputs.source_sha }}
 
 jobs:
   build:
@@ -50,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
@@ -91,7 +87,6 @@ jobs:
 
   release:
     needs: build
-    if: ${{ inputs.tag != '' || startsWith(github.ref, 'refs/tags/sb-v') }}
     outputs:
       tag: ${{ env.RELEASE_TAG }}
       url: ${{ steps.publish.outputs.url }}
@@ -99,10 +94,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - name: Enforce release provenance
-        # This job only runs for a real release tag. The tag must already exist
+        # The tag must already exist
         # and resolve exactly to the reviewed source commit; a missing tag,
         # invalid tag, or any SHA mismatch fails. Publication must not create
         # the tag implicitly.

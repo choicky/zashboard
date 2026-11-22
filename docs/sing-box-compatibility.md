@@ -108,8 +108,9 @@ PR 的隔离验收配置同时启用了官方 Clash API mode 服务，已在真�
 ## 上游同步与兼容性验证
 
 `.github/workflows/sync-upstream.yml` 每日运行并支持手动触发；同步 PR 描述里的
-上游范围以 merge-base 计算，只列上游侧提交与文件。合并前后都由同一个
-`validate-sync.yml` 校验实际结果：locked install、type-check、非破坏性 lint、
+上游范围以 merge-base 计算，只列上游侧提交与文件。合并前（作为 `custom` 的
+必需检查 `validate`、`native-browser`；由 `GITHUB_TOKEN` 创建或更新的 PR 需先点
+Approve workflows to run）与合并后都由同一个 `validate-sync.yml` 校验实际结果：locked install、type-check、非破坏性 lint、
 full/no-fonts 构建、兼容性测试、浏览器验收，以及官方 1.14.4 分发二进制的
 native endpoint 与浏览器验收。
 

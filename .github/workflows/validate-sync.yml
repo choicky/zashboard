@@ -18,8 +18,11 @@ on:
         description: 'Commit that must be contained in the validated result'
         required: false
         type: string
-  # Called synchronously by sync-upstream and auto-release. A caller fails when
-  # any mandatory job here fails, so validation has one implementation only.
+  # Before merge this runs as the PR's required checks (`validate`,
+  # `native-browser`) for every PR into custom; PRs opened or updated by
+  # GITHUB_TOKEN need "Approve workflows to run". After merge auto-release
+  # calls it synchronously on the exact merge commit and fails if it fails,
+  # so validation has one implementation only.
   workflow_call:
     inputs:
       pr_number:

@@ -22,17 +22,23 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    outputs:
-      pr_number: ${{ steps.pr.outputs.number }}
-      upstream_sha: ${{ steps.compare.outputs.upstream_sha }}
     steps:
       # Check out the workflow's own ref: it holds the scripts used below.
       # `main` is an upstream mirror and must not be the working tree.
+      #
+      # The checkout credential is what `git push` uses to fast-forward `main`.
+      # GITHUB_TOKEN can never push commits that touch `.github/workflows/`,
+      # so an upstream workflow change would stop the mirror. SYNC_TOKEN is a
+      # fine-grained token limited to this repository with Contents and
+      # Workflows write access; it is used for that push only (the PR steps
+      # keep GITHUB_TOKEN). Without the secret the old behaviour is kept.
+      # Never name it PAT: the mirrored upstream deploy workflow reads
+      # secrets.PAT, and that workflow must stay disabled in this fork.
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Fast-forward main from upstream
         id: compare
@@ -98,8 +104,9 @@ jobs:
             printf '### Changed files (upstream side only)\n\n```\n%s\n```\n\n' "$changed"
             printf '### sing-box-sensitive files\n\n```\n%s\n```\n\n' "$sensitive"
             printf '### Validation status\n\n'
-            printf '`Validate synchronization result` runs on this exact merge result and\n'
-            printf 'must succeed before this PR may be merged. Review its result.\n\n'
+            printf '`Validate synchronization result` runs on this PR merge result as the\n'
+            printf 'required checks `validate` and `native-browser`. If the runs show\n'
+            printf '**Approve workflows to run**, approve them; both must pass before merging.\n\n'
             printf '### Unresolved risks\n\n'
             printf 'Upstream changes may overlap restored sing-box compatibility code. Check the\n'
             printf 'Clash API and native gRPC-Web results; Git reporting no conflicts is not approval.\n\n'
@@ -177,16 +184,3 @@ jobs:
               printf '**Failure reason:** %s\n' "$reason"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-
-  # Synchronous reusable call: the caller fails if any validation job fails,
-  # so a sync run can never succeed while its PR is unvalidated.
-  validate:
-    needs: sync
-    if: needs.sync.outputs.pr_number != ''
-    permissions:
-      contents: read
-      pull-requests: read
-    uses: ./.github/workflows/validate-sync.yml
-    with:
-      pr_number: ${{ needs.sync.outputs.pr_number }}
-      expected_head: ${{ needs.sync.outputs.upstream_sha }}

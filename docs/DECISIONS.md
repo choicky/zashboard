@@ -16,6 +16,12 @@ repeat them elsewhere.
 Flow: upstream `main` → fork `main` → PR `main → custom` → validation and
 review → manual merge → automatic fork Release.
 
+The mirror push uses the `SYNC_TOKEN` secret (fine-grained, this repository
+only, Contents and Workflows write) so upstream workflow changes can be
+mirrored; without it `GITHUB_TOKEN` is used. Never name it `PAT`: the mirrored
+upstream "Build and Deploy" workflow reads `secrets.PAT` and must stay disabled
+in this fork.
+
 - Fast-forward fork `main` only when it is an ancestor of upstream `main`.
   Divergence or fork-only commits are a hard failure, never an overwrite.
 - Upstream already in `custom` is a successful no-op. Keep exactly one open
@@ -25,11 +31,18 @@ review → manual merge → automatic fork Release.
 
 ## Merge and release boundaries
 
-A release is created only for a PR that is merged, based on `custom`, with head
-`main` from the same repository, and whose merge commit is the current HEAD of
-`custom`. Validation of that exact commit must succeed first. Arbitrary pushes
-and unrelated PRs do not publish. Manual dispatch is limited to retrying an
-already-merged sync PR.
+Every PR merged into `custom` from this repository publishes a release: the
+`main → custom` sync PR and feature PRs alike. Before merge, `validate` and
+`native-browser` are required checks on `custom`; after merge, validation of
+the exact merge commit must succeed again before tagging.
+
+- The merge commit must be the current HEAD of `custom`. If several PRs merge in
+  quick succession, an older merge already contained in `custom` is skipped
+  successfully; the newest merge publishes and includes it.
+- PRs from other repositories and direct pushes never publish.
+- Publication is reachable only from auto-release: no tag-push or manual entry
+  in the build workflow. Manual dispatch of auto-release retries an
+  already-merged PR.
 
 ## Stable version selection
 

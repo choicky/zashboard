@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -110,6 +110,15 @@ try {
   assert.deepEqual(range.sensitive, ['src/gen/probe.ts'])
   assert.equal(range.files.includes('custom-only.txt'), false)
   assert.equal(range.files.includes('shared.txt'), false)
+
+  // Workflow structure: the mirror push uses SYNC_TOKEN when configured (it
+  // must be able to push upstream workflow changes), never a secret named PAT
+  // (read by the disabled upstream deploy workflow), and validation is not
+  // duplicated here: it runs as the PR's required checks.
+  const workflow = readFileSync(join(root, '.github/workflows/sync-upstream.yml'), 'utf8')
+  assert.match(workflow, /token: \$\{\{ secrets\.SYNC_TOKEN \|\| secrets\.GITHUB_TOKEN \}\}/)
+  assert.doesNotMatch(workflow, /\$\{\{[^}]*secrets\.PAT\b/)
+  assert.doesNotMatch(workflow, /uses: \.\/\.github\/workflows\/validate-sync\.yml/)
 } finally {
   rmSync(dir, { recursive: true, force: true })
   rmSync(rangeDir, { recursive: true, force: true })
