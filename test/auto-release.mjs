@@ -80,6 +80,19 @@ try {
   const collided = decide(state({ tags: [{ name: tag, sha: OTHER }] }))
   assert.equal(collided.decision, 'create-tag')
   assert.notEqual(collided.tag, tag)
+  // Versions compare numerically after the 4-character `sb-v` prefix: with a
+  // gap, the next tag follows the highest one, not the first free patch.
+  const gap = decide(
+    state({
+      tags: [
+        { name: 'sb-v3.30.0', sha: OTHER },
+        { name: 'sb-v3.30.5', sha: OTHER },
+      ],
+    }),
+  )
+  assert.equal(gap.tag, 'sb-v3.30.6')
+  assert.equal(decide(state({ baseVersion: '3.31.0' })).tag, 'sb-v3.31.0')
+
   // Inconsistent or invalid state fails with a non-zero exit.
   assert.equal(
     decideFails(
@@ -180,6 +193,92 @@ try {
     assert.equal(decideFails(realState(third, ambiguous)), true)
   } finally {
     rmSync(repoDir, { recursive: true, force: true })
+  }
+
+  // --- policy C: skip releases that change nothing the package ships ---
+  const relRepo = mkdtempSync(join(tmpdir(), 'zashboard-relevance-'))
+  const rgit = (...args) =>
+    execFileSync('git', ['-C', relRepo, ...args], { encoding: 'utf8' }).trim()
+  const commitFile = (path, text = `${path}\n`) => {
+    mkdirSync(join(relRepo, path, '..'), { recursive: true })
+    writeFileSync(join(relRepo, path), text)
+    rgit('add', '.')
+    rgit('commit', '-q', '-m', path)
+    return rgit('rev-parse', 'HEAD')
+  }
+  const relevance = (head, tags) =>
+    parse(
+      node('scripts/release-relevance.mjs', [
+        '--repo',
+        relRepo,
+        '--sha',
+        head,
+        '--tags',
+        JSON.stringify(tags),
+      ]),
+    )
+  try {
+    rgit('init', '-q')
+    rgit('config', 'user.email', 'test@example.invalid')
+    rgit('config', 'user.name', 'test')
+    const released = commitFile('src/main.ts')
+    const tags = [{ name: 'sb-v3.30.2', sha: released }]
+
+    // No earlier stable release: always relevant.
+    assert.equal(relevance(released, []).relevant, 'true')
+    // A tag already at the merge keeps recovery relevant.
+    assert.equal(relevance(released, tags).relevant, 'true')
+
+    // Docs, CI, tests, helpers and root metadata only: skip.
+    for (const path of [
+      'AGENTS.md',
+      'docs/DECISIONS.md',
+      '.github/workflows/x.yml',
+      'test/a.mjs',
+      'scripts/release-state.mjs',
+      'README.md',
+    ])
+      commitFile(path)
+    const docsOnly = rgit('rev-parse', 'HEAD')
+    const skipped = relevance(docsOnly, tags)
+    assert.equal(skipped.relevant, 'false')
+    assert.match(skipped.reason, /since sb-v3\.30\.2/)
+
+    // Any product path, here nested Markdown inside src, counts.
+    const product = commitFile('src/notes.md')
+    const kept = relevance(product, tags)
+    assert.equal(kept.relevant, 'true')
+    assert.equal(kept.files, 'src/notes.md')
+    for (const path of ['package.json', 'pnpm-lock.yaml', 'public/icon.png', 'vite.config.ts']) {
+      rgit('reset', '-q', '--hard', docsOnly)
+      assert.equal(relevance(commitFile(path), tags).relevant, 'true', path)
+    }
+
+    // Moving a packaged file into an excluded directory removes it from the
+    // package, so the rename's source path must count.
+    rgit('reset', '-q', '--hard', docsOnly)
+    commitFile('public/ATTRIBUTION.md', 'attribution text that git can track as a rename\n')
+    const movedTags = [{ name: 'sb-v3.30.3', sha: rgit('rev-parse', 'HEAD') }]
+    mkdirSync(join(relRepo, 'docs'), { recursive: true })
+    rgit('mv', 'public/ATTRIBUTION.md', 'docs/ATTRIBUTION.md')
+    rgit('commit', '-q', '-m', 'move attribution to docs')
+    const moved = relevance(rgit('rev-parse', 'HEAD'), movedTags)
+    assert.equal(moved.relevant, 'true', JSON.stringify(moved))
+    assert.equal(moved.files, 'public/ATTRIBUTION.md')
+
+    // The newest contained stable tag is the baseline; a tag not contained in
+    // the merge is ignored.
+    rgit('reset', '-q', '--hard', product)
+    const productTagged = [...tags, { name: 'sb-v3.30.3', sha: product }]
+    const later = relevance(commitFile('docs/later.md'), productTagged)
+    assert.equal(later.relevant, 'false', JSON.stringify(later))
+    assert.equal(
+      relevance(rgit('rev-parse', 'HEAD'), [...tags, { name: 'sb-v9.9.9', sha: OTHER }]).relevant,
+      'true',
+    )
+    assert.equal(fails('scripts/release-relevance.mjs', ['--repo', relRepo, '--sha', 'abc']), true)
+  } finally {
+    rmSync(relRepo, { recursive: true, force: true })
   }
 
   // --- complete asset verification ---
@@ -283,6 +382,11 @@ try {
   // successful skip; only the newest merge publishes.
   assert.match(autoRelease, /git merge-base --is-ancestor "\$MERGE_SHA" "\$head_sha"/)
   assert.match(autoRelease, /echo 'decision=skip'/)
+  // Policy C runs before tag allocation, so a skipped merge never takes a tag.
+  assert.ok(
+    autoRelease.indexOf('scripts/release-relevance.mjs') <
+      autoRelease.indexOf('scripts/release-state.mjs --state'),
+  )
 
   // Publication has no entry that bypasses validation: no tag push, no
   // manual dispatch, only the reusable call from auto-release.

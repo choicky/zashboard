@@ -55,7 +55,7 @@ const decide = (s) => {
   }
 
   // No stable tag at this merge: allocate exactly one collision-free tag.
-  const parse = (name) => name.slice(3).split('.').map(Number)
+  const parse = (name) => name.slice(4).split('.').map(Number)
   const compare = (a, b) => {
     for (let index = 0; index < 3; index++)
       if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1
