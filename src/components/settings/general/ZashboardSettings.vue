@@ -16,7 +16,7 @@
         >
           zashboard
           <span class="text-sm font-normal opacity-50">
-            {{ zashboardVersion }}
+            {{ zashboardReleaseTag }}
             <span
               v-if="commitId"
               class="text-xs"
@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { isUIUpdateAvailable, zashboardVersion } from '@/assembly/version'
+import { isUIUpdateAvailable, zashboardReleaseTag } from '@/assembly/version'
 import GeneralSettings from './GeneralSettings.vue'
 import StyleSettings from './StyleSettings.vue'
 
