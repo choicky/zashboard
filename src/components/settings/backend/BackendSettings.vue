@@ -156,6 +156,14 @@
             {{ $t('coreUpdateReleasePage') }}
           </a>
         </SettingItem>
+        <SettingItem
+          :setting-key="k.checkCoreUpgrade"
+          anchor-key="coreUpToDate"
+          :when="checkUpgradeCore && !!coreUpToDateLabel"
+          class="settings-dependent-item"
+        >
+          <div class="setting-item-label text-base-content/60">{{ $t(coreUpToDateLabel!) }}</div>
+        </SettingItem>
         <!-- sing-box cannot upgrade itself through either API. -->
         <SettingItem
           :setting-key="k.autoUpgradeCore"
@@ -214,7 +222,7 @@
 import { can } from '@/assembly/backend'
 import { daeCapabilities } from '@/assembly/capabilities'
 import { configs, updateConfigs } from '@/assembly/config'
-import { coreBrand, isCoreUpdateAvailable, singboxUpdate } from '@/assembly/version'
+import { coreBrand, coreUpdateStatus, isCoreUpdateAvailable } from '@/assembly/version'
 import BackendVersion from '@/components/common/BackendVersion.vue'
 import SelectInput, { type SelectOption } from '@/components/common/SelectInput.vue'
 import BackendPortsGrid from '@/components/settings/backend/BackendPortsGrid.vue'
@@ -302,11 +310,20 @@ const hasVisibleItems = computed(
     showDnsDiagnostics.value,
 )
 
+// sing-box: an available release to link to. mihomo keeps its upgrade action.
+const singboxUpdate = computed(() =>
+  coreUpdateStatus.value?.state === 'update' ? coreUpdateStatus.value.update : undefined,
+)
+const coreUpToDateLabel = computed(() => {
+  const status = coreUpdateStatus.value
+  if (status?.state !== 'latest') return undefined
+  if (status.channel === 'stable') return 'coreUpToDateStable'
+  if (status.channel === 'testing') return 'coreUpToDateTesting'
+  return 'coreUpToDate'
+})
 const handlerCheckUpgradeCoreChange = () => {
   if (!checkUpgradeCore.value) {
     autoUpgradeCore.value = false
-    isCoreUpdateAvailable.value = false
-    singboxUpdate.value = undefined
   }
 }
 const hanlderTunModeChange = async () => {

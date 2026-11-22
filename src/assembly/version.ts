@@ -14,19 +14,21 @@ import { fetchCapabilities, resetCapabilities } from './capabilities'
 import { runOptionalCoreUpdateCheck } from './core-update'
 import { driver } from './driver'
 import {
-  findSingboxUpdate,
   hasNewerStableRelease,
   parseSingboxVersion,
   releasesUrlFor,
+  singboxUpdateStatus,
+  type CoreUpdateStatus,
   type ForkRelease,
   type SingboxRelease,
-  type SingboxUpdate,
 } from './release-version'
 
 export const version = ref()
 export const isCoreUpdateAvailable = ref(false)
-// Newer official sing-box release; the user upgrades on the host.
-export const singboxUpdate = ref<SingboxUpdate | undefined>()
+// Last successful core update check for the active backend; undefined while
+// unchecked, disabled or after a failed check. For sing-box an available
+// update carries the release to link to; the user upgrades on the host.
+export const coreUpdateStatus = ref<CoreUpdateStatus | undefined>()
 export const isUIUpdateAvailable = ref(false)
 // The fork release tag (e.g. sb-v3.30.4) is the dashboard's identity: it is
 // shown in settings and compared with newer fork releases. package.json keeps
@@ -137,29 +139,78 @@ const probeBackendVersion = async (backend: Backend) => {
   // recursively awaiting the probe that is still in flight.
   setTimeout(() => void checkUIUpdate(), 0)
 
-  if (!checkUpgradeCore.value || backend.disableUpgradeCore) return
+  // Page load, backend switch and reconnects may reuse a recent answer.
+  void checkCoreUpdate()
+}
 
-  const updateGeneration = backendGeneration
-  const backendUuid = backend.uuid
+const CORE_UPDATE_INTERVAL = 30 * 60 * 1000
+let coreUpdateCheckSeq = 0
+
+const clearCoreUpdate = () => {
+  coreUpdateCheckSeq++
+  isCoreUpdateAvailable.value = false
+  coreUpdateStatus.value = undefined
+}
+
+// One entry for every trigger: probe, enabling the setting, and the periodic
+// timer. Only the newest check for the current backend may publish a result.
+// `fresh` bypasses the local cache so an explicit or periodic check really
+// asks GitHub again, and first re-reads the installed version: the core may
+// have been upgraded (on the host, or by an automatic mihomo upgrade) while
+// the page stayed open, and comparing a stale version would keep reporting,
+// or re-triggering, an update that is already installed.
+export const checkCoreUpdate = async ({ fresh = false } = {}) => {
+  const backend = activeBackend.value
+  let versionString = version.value
+  if (
+    !backend ||
+    !versionString ||
+    backendProbe.value?.uuid !== backend.uuid ||
+    backendProbe.value.status !== 'connected' ||
+    !checkUpgradeCore.value ||
+    backend.disableUpgradeCore
+  ) {
+    return
+  }
+
+  const seq = ++coreUpdateCheckSeq
+  const generation = backendGeneration
   const isCurrent = () =>
-    backendGeneration === updateGeneration && activeBackend.value?.uuid === backendUuid
+    seq === coreUpdateCheckSeq &&
+    backendGeneration === generation &&
+    activeBackend.value?.uuid === backend.uuid &&
+    checkUpgradeCore.value
+  const maxAge = fresh ? 0 : undefined
+  const publish = (status: CoreUpdateStatus | undefined) => {
+    coreUpdateStatus.value = status
+    isCoreUpdateAvailable.value = status?.state === 'update'
+  }
+
+  if (fresh) {
+    try {
+      const installed = await driver().system.fetchVersion()
+      if (!isCurrent()) return
+      if (installed && installed !== versionString) {
+        versionString = installed
+        version.value = installed
+      }
+    } catch {
+      // Core unreachable right now: do not compare a possibly stale version.
+      if (isCurrent()) publish(undefined)
+      return
+    }
+  }
 
   if (can('coreUpdateNotice')) {
-    let update: SingboxUpdate | undefined
+    let status: CoreUpdateStatus | undefined
     runOptionalCoreUpdateCheck({
       check: async () => {
-        update = await fetchSingboxUpdate(versionString)
-        return !!update
+        status = await fetchSingboxUpdateStatus(versionString, maxAge)
+        return status?.state === 'update'
       },
       isCurrent,
-      onResult: (available) => {
-        isCoreUpdateAvailable.value = available
-        singboxUpdate.value = update
-      },
-      onFailure: () => {
-        isCoreUpdateAvailable.value = false
-        singboxUpdate.value = undefined
-      },
+      onResult: () => publish(status),
+      onFailure: () => publish(undefined),
     })
     return
   }
@@ -169,16 +220,25 @@ const probeBackendVersion = async (backend: Backend) => {
   const updateVersion = mihomo.value?.[1] ?? versionString
   const updateChannel = MIHOMO_CHANNEL[mihomo.value?.[0] ?? MIHOMO.Meta]
   runOptionalCoreUpdateCheck({
-    check: () => fetchIsCoreUpdateAvailable(updateChannel.check_update_url, updateVersion),
+    check: () => fetchIsCoreUpdateAvailable(updateChannel.check_update_url, updateVersion, maxAge),
     isCurrent,
     onResult: (available) => {
-      isCoreUpdateAvailable.value = available
+      publish({ state: available ? 'update' : 'latest' })
       if (available && autoUpgradeCore.value) upgradeCore('auto').catch(() => {})
     },
-    onFailure: () => {
-      isCoreUpdateAvailable.value = false
-    },
+    onFailure: () => publish(undefined),
   })
+}
+
+// Enabling the setting checks at once; disabling it clears any result.
+watch(checkUpgradeCore, (enabled, wasEnabled) => {
+  if (!enabled) clearCoreUpdate()
+  else if (!wasEnabled) void checkCoreUpdate({ fresh: true })
+})
+
+// While the page stays open, check again every 30 minutes (bypassing the cache).
+if (typeof window !== 'undefined') {
+  window.setInterval(() => void checkCoreUpdate({ fresh: true }), CORE_UPDATE_INTERVAL)
 }
 
 let probe: Promise<void> = Promise.resolve()
@@ -194,8 +254,7 @@ export const probeActiveBackend = () => {
   resetCore()
   resetCapabilities()
   version.value = ''
-  isCoreUpdateAvailable.value = false
-  singboxUpdate.value = undefined
+  clearCoreUpdate()
   backendProbe.value = backend
     ? { uuid: backend.uuid, status: 'probing', latency: 0, message: '' }
     : undefined
@@ -204,22 +263,28 @@ export const probeActiveBackend = () => {
   return probe
 }
 
-const fetchIsCoreUpdateAvailable = async (url: string, versionNumber: string) => {
-  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(url, versionNumber)
+const fetchIsCoreUpdateAvailable = async (url: string, versionNumber: string, maxAge?: number) => {
+  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(
+    url,
+    versionNumber,
+    maxAge,
+  )
 
   return !assets.some(({ name }) => name.includes(versionNumber))
 }
 
 // Stable installs compare with the latest stable release, testing installs
 // (alpha/beta/rc) with the newest release of any kind.
-const fetchSingboxUpdate = async (versionString: string) => {
+// An unparseable version yields no status: never claim "up to date" for it.
+const fetchSingboxUpdateStatus = async (versionString: string, maxAge?: number) => {
   const installed = parseSingboxVersion(versionString)
   if (!installed) return undefined
   const data = await fetchWithLocalCache<SingboxRelease | SingboxRelease[]>(
     releasesUrlFor(installed),
     versionString,
+    maxAge,
   )
-  return findSingboxUpdate(Array.isArray(data) ? data : [data], installed)
+  return singboxUpdateStatus(Array.isArray(data) ? data : [data], installed)
 }
 
 const checkUIUpdateForGeneration = async (checkGeneration: number) => {
