@@ -194,6 +194,7 @@ const zhTW: LANG_MESSAGE = {
   coreUpdateAvailableTesting: '有新測試版：{version}',
   coreUpdateManualHint: '請在執行 sing-box 的裝置上升級',
   coreUpdateReleasePage: '發佈頁',
+  coreUpdateCheckFailed: '檢查更新失敗：{reason}',
   coreUpToDate: '目前已是最新版本，無需更新',
   coreUpToDateStable: '目前使用的是最新的穩定版，無需更新',
   coreUpToDateTesting: '目前使用的是最新的測試版，無需更新',

@@ -195,6 +195,7 @@ const en = {
   coreUpdateAvailableTesting: 'New testing version available: {version}',
   coreUpdateManualHint: 'Upgrade sing-box on the device that runs it',
   coreUpdateReleasePage: 'Release page',
+  coreUpdateCheckFailed: 'Update check failed: {reason}',
   coreUpToDate: 'You are on the latest version, no update needed',
   coreUpToDateStable: 'You are on the latest stable version, no update needed',
   coreUpToDateTesting: 'You are on the latest testing version, no update needed',

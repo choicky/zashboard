@@ -16,6 +16,7 @@ import { driver } from './driver'
 import {
   hasNewerStableRelease,
   parseSingboxVersion,
+  pickSingboxReleases,
   releasesUrlFor,
   singboxUpdateStatus,
   type CoreUpdateStatus,
@@ -186,6 +187,11 @@ export const checkCoreUpdate = async ({ fresh = false } = {}) => {
     isCoreUpdateAvailable.value = status?.state === 'update'
   }
 
+  const failed = (error: unknown): CoreUpdateStatus => ({
+    state: 'failed',
+    reason: getRequestErrorMessage(error) || String(error),
+  })
+
   if (fresh) {
     try {
       const installed = await driver().system.fetchVersion()
@@ -194,9 +200,9 @@ export const checkCoreUpdate = async ({ fresh = false } = {}) => {
         versionString = installed
         version.value = installed
       }
-    } catch {
+    } catch (error) {
       // Core unreachable right now: do not compare a possibly stale version.
-      if (isCurrent()) publish(undefined)
+      if (isCurrent()) publish(failed(error))
       return
     }
   }
@@ -210,7 +216,7 @@ export const checkCoreUpdate = async ({ fresh = false } = {}) => {
       },
       isCurrent,
       onResult: () => publish(status),
-      onFailure: () => publish(undefined),
+      onFailure: (error) => publish(failed(error)),
     })
     return
   }
@@ -226,7 +232,7 @@ export const checkCoreUpdate = async ({ fresh = false } = {}) => {
       publish({ state: available ? 'update' : 'latest' })
       if (available && autoUpgradeCore.value) upgradeCore('auto').catch(() => {})
     },
-    onFailure: () => publish(undefined),
+    onFailure: (error) => publish(failed(error)),
   })
 }
 
@@ -268,6 +274,11 @@ const fetchIsCoreUpdateAvailable = async (url: string, versionNumber: string, ma
     url,
     versionNumber,
     maxAge,
+    (raw) => ({
+      assets: ((raw as { assets?: { name: string }[] }).assets ?? []).map(({ name }) => ({
+        name,
+      })),
+    }),
   )
 
   return !assets.some(({ name }) => name.includes(versionNumber))
@@ -279,12 +290,13 @@ const fetchIsCoreUpdateAvailable = async (url: string, versionNumber: string, ma
 const fetchSingboxUpdateStatus = async (versionString: string, maxAge?: number) => {
   const installed = parseSingboxVersion(versionString)
   if (!installed) return undefined
-  const data = await fetchWithLocalCache<SingboxRelease | SingboxRelease[]>(
+  const releases = await fetchWithLocalCache<SingboxRelease[]>(
     releasesUrlFor(installed),
     versionString,
     maxAge,
+    pickSingboxReleases,
   )
-  return singboxUpdateStatus(Array.isArray(data) ? data : [data], installed)
+  return singboxUpdateStatus(releases, installed)
 }
 
 const checkUIUpdateForGeneration = async (checkGeneration: number) => {

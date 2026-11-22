@@ -2,7 +2,7 @@ export type OptionalCoreUpdateCheck = {
   check: () => Promise<boolean>
   isCurrent: () => boolean
   onResult: (available: boolean) => void
-  onFailure: () => void
+  onFailure: (error: unknown) => void
 }
 
 export const runOptionalCoreUpdateCheck = (options: OptionalCoreUpdateCheck) => {
@@ -10,8 +10,8 @@ export const runOptionalCoreUpdateCheck = (options: OptionalCoreUpdateCheck) => 
     (available) => {
       if (options.isCurrent()) options.onResult(available)
     },
-    () => {
-      if (options.isCurrent()) options.onFailure()
+    (error) => {
+      if (options.isCurrent()) options.onFailure(error)
     },
   )
 }

@@ -164,6 +164,16 @@
         >
           <div class="setting-item-label text-base-content/60">{{ $t(coreUpToDateLabel!) }}</div>
         </SettingItem>
+        <SettingItem
+          :setting-key="k.checkCoreUpgrade"
+          anchor-key="coreUpdateFailed"
+          :when="checkUpgradeCore && !!coreUpdateFailure"
+          class="settings-dependent-item"
+        >
+          <div class="setting-item-label text-warning break-all">
+            {{ $t('coreUpdateCheckFailed', { reason: coreUpdateFailure }) }}
+          </div>
+        </SettingItem>
         <!-- sing-box cannot upgrade itself through either API. -->
         <SettingItem
           :setting-key="k.autoUpgradeCore"
@@ -313,6 +323,9 @@ const hasVisibleItems = computed(
 // sing-box: an available release to link to. mihomo keeps its upgrade action.
 const singboxUpdate = computed(() =>
   coreUpdateStatus.value?.state === 'update' ? coreUpdateStatus.value.update : undefined,
+)
+const coreUpdateFailure = computed(() =>
+  coreUpdateStatus.value?.state === 'failed' ? coreUpdateStatus.value.reason : undefined,
 )
 const coreUpToDateLabel = computed(() => {
   const status = coreUpdateStatus.value

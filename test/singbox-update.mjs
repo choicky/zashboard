@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   findSingboxUpdate,
   parseSingboxVersion,
+  pickSingboxReleases,
   releasesUrlFor,
   SINGBOX_LATEST_RELEASE_URL,
   SINGBOX_RECENT_RELEASES_URL,
@@ -79,5 +80,11 @@ assert.deepEqual(singboxUpdateStatus([release('v1.14.4')], installed('1.14.4')),
 const updateStatus = singboxUpdateStatus(recent, installed('1.15.0-alpha.13'))
 assert.equal(updateStatus.state, 'update')
 assert.equal(updateStatus.update.version, '1.15.0-alpha.14')
+
+// Only the fields the check reads are kept (the raw API carries every asset).
+const raw = { ...release('v1.14.4'), assets: [{ name: 'x', uploader: {} }], body: 'notes' }
+assert.deepEqual(pickSingboxReleases(raw), [release('v1.14.4')])
+assert.deepEqual(pickSingboxReleases([raw, raw]).length, 2)
+assert.equal('assets' in pickSingboxReleases([raw])[0], false)
 
 console.log('sing-box update notice: version parsing, channel selection and status passed')
