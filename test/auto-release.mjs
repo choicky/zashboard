@@ -112,9 +112,10 @@ try {
     true,
   )
   assert.equal(fails('scripts/release-eligibility.mjs', [], { ...eligible, PR_BASE: 'main' }), true)
-  assert.equal(
-    fails('scripts/release-eligibility.mjs', [], { ...eligible, PR_HEAD: 'feature' }),
-    true,
+  // Policy B: feature PRs into custom publish too, not only the main sync PR.
+  assert.match(
+    node('scripts/release-eligibility.mjs', [], { ...eligible, PR_HEAD: 'feat/x' }),
+    /eligible=true/,
   )
   assert.equal(
     fails('scripts/release-eligibility.mjs', [], { ...eligible, PR_HEAD_REPO: 'other/zashboard' }),
@@ -273,6 +274,25 @@ try {
   assert.match(provenance, /git rev-parse --verify "refs\/tags\/\$RELEASE_TAG\^\{\}"/)
   assert.match(provenance, /test "\$resolved" = "\$RELEASE_SHA"/)
   assert.match(provenance, /exit 1/)
+
+  // Every same-repo PR merged into custom publishes; the trigger filter does
+  // not pin the head branch to main.
+  assert.doesNotMatch(autoRelease, /head\.ref == 'main'/)
+  assert.match(autoRelease, /head\.repo\.full_name == github\.repository/)
+  // Rapid successive merges: an older merge already contained in custom is a
+  // successful skip; only the newest merge publishes.
+  assert.match(autoRelease, /git merge-base --is-ancestor "\$MERGE_SHA" "\$head_sha"/)
+  assert.match(autoRelease, /echo 'decision=skip'/)
+
+  // Publication has no entry that bypasses validation: no tag push, no
+  // manual dispatch, only the reusable call from auto-release.
+  const buildTriggers = buildRelease.slice(
+    buildRelease.indexOf('on:\n'),
+    buildRelease.indexOf('permissions:'),
+  )
+  assert.doesNotMatch(buildTriggers, /^  push:|^  workflow_dispatch:/m)
+  assert.match(buildTriggers, /^  workflow_call:/m)
+  assert.doesNotMatch(buildRelease, /sb-v0\.0\.0-dev|github\.ref/)
 
   // Removed logic has not returned.
   assert.doesNotMatch(autoRelease, /releases=\$\(gh api|argjson releases|VALIDATED|VALIDATION_SHA/)

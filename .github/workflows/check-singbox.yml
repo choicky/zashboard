@@ -16,6 +16,8 @@ permissions:
 jobs:
   stable:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -56,30 +58,47 @@ jobs:
   development:
     continue-on-error: true
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.inspect.outputs.status }}
+      messages: ${{ steps.inspect.outputs.messages }}
     steps:
       - uses: actions/checkout@v6
       - name: Inspect testing protocol without changing the pinned source
+        id: inspect
         env:
           PINNED_PROTO_SHA: 2c27937b6c58e4fae1eb9cd2b231e45841be7838
         run: |
+          # Every outcome is reported to the `report` job: `warn` (protocol
+          # drift or a failed development binary) opens/updates the tracking
+          # issue; `info` (nothing to test) does not; a crash reports `error`.
+          notes="$RUNNER_TEMP/dev-notes"; : > "$notes"; status=ok
+          warn() { echo "::warning::$1"; echo "- $1" >> "$notes"; status=warn; }
+          info() { echo "::notice::$1"; echo "- $1" >> "$notes"; [ "$status" = warn ] || status=info; }
+          finish() {
+            code=$?
+            [ "$code" -eq 0 ] || { echo "- development check stopped with exit code $code" >> "$notes"; status=error; }
+            echo "status=$status" >> "$GITHUB_OUTPUT"
+            { echo 'messages<<SB_NOTES_EOF'; cat "$notes"; echo 'SB_NOTES_EOF'; } >> "$GITHUB_OUTPUT"
+          }
+          trap finish EXIT
           current=$(curl -fsSL https://api.github.com/repos/SagerNet/sing-box/contents/daemon/started_service.proto?ref=testing | jq -r .sha)
           echo "sing-box testing started_service.proto: $current"
           echo "pinned v1.14.4 proto blob: $PINNED_PROTO_SHA"
           if [ "$current" != "$PINNED_PROTO_SHA" ]; then
-            echo "::warning::sing-box testing protocol changed; native binary compatibility is not verified and generated files were not rewritten"
+            warn "sing-box testing protocol changed (started_service.proto $current, pinned $PINNED_PROTO_SHA); generated files were not rewritten"
           else
             echo 'testing protocol matches the pinned source; no development binary is published by this check'
           fi
           release_json=$(curl -fsSL 'https://api.github.com/repos/SagerNet/sing-box/releases?per_page=30')
           release=$(printf '%s' "$release_json" | jq -r '[.[] | select(.prerelease == true) | .tag_name][0] // empty')
           if [ -z "$release" ]; then
-            echo '::warning::no official sing-box development binary release is available; binary check is unexecuted'
+            info 'no official sing-box development binary release is available; binary check is unexecuted'
             exit 0
           fi
           echo "development release candidate discovered: $release"
           asset=$(printf '%s' "$release_json" | jq -r --arg tag "$release" '.[] | select(.tag_name == $tag) | .assets[] | select(.name | test("linux-amd64\\.tar\\.gz$")) | .browser_download_url' | head -n 1)
           if [ -z "$asset" ]; then
-            echo '::warning::the development release has no official linux-amd64 archive; binary check is unexecuted'
+            info "development release $release has no official linux-amd64 archive; binary check is unexecuted"
             exit 0
           fi
           mkdir -p "$RUNNER_TEMP/sb-dev"
@@ -88,7 +107,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/sb-dev"
           binary=$(find "$RUNNER_TEMP/sb-dev" -type f -name sing-box -perm -u+x | head -n 1)
           if [ -z "$binary" ]; then
-            echo '::warning::development archive did not contain an executable sing-box; binary check is unexecuted'
+            warn "development release $release archive did not contain an executable sing-box"
             exit 0
           fi
           dev_version=$("$binary" version | awk 'NR==1 {print $3}')
@@ -98,5 +117,64 @@ jobs:
           "$binary" run -c "$RUNNER_TEMP/sb-dev/config.json" > "$RUNNER_TEMP/sb-dev/core.log" 2>&1 &
           for i in $(seq 1 20); do curl -fsS http://127.0.0.1:19093/ >/dev/null 2>&1 && break; sleep 1; done
           if ! SINGBOX_SECRET=ci-dev-secret SINGBOX_API_URL=http://127.0.0.1:19093 SINGBOX_EXPECTED_VERSION="$dev_version" node test/singbox-native.mjs; then
-            echo '::warning::development binary native compatibility check failed; stable support remains unchanged'
+            warn "development release $release ($dev_version) failed the native compatibility check; stable support remains unchanged"
+          fi
+
+  # Follow-up, not just a red run: one tracking issue is opened or updated
+  # while stable fails or the development check reports a problem (including
+  # warnings that keep the run green), and closed once a scheduled check is
+  # clean again. Manual runs pinned to a specific version never touch it.
+  report:
+    needs: [stable, development]
+    if: >-
+      always() &&
+      (github.event_name == 'schedule' || inputs.version == '')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STABLE_RESULT: ${{ needs.stable.result }}
+          STABLE_VERSION: ${{ needs.stable.outputs.version }}
+          DEV_STATUS: ${{ needs.development.outputs.status }}
+          DEV_MESSAGES: ${{ needs.development.outputs.messages }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title='sing-box compatibility check needs attention'
+          problems=''
+          if [ "$STABLE_RESULT" != success ]; then
+            problems+="- Stable ${STABLE_VERSION:-(version unresolved)}: native endpoint/browser check result is \`$STABLE_RESULT\`"$'\n'
+          fi
+          case "$DEV_STATUS" in
+            ok|info) ;;
+            warn|error) problems+="$DEV_MESSAGES"$'\n' ;;
+            *) problems+='- development check did not report a result'$'\n' ;;
+          esac
+
+          if [ "$(gh api "repos/$GH_REPO" --jq .has_issues)" != true ]; then
+            echo '::error::Issues are disabled in this repository; enable them so compatibility problems can be tracked'
+            printf '%s' "$problems" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          number=$(gh issue list --state open --limit 100 --json number,title \
+            | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')
+
+          if [ -n "$problems" ]; then
+            body=$(printf '%s\n\n%s\n\nRun: %s\n' "Compatibility check found problems on $(date -u +%F):" "$problems" "$RUN_URL")
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "$body"
+            else
+              gh issue create --title "$title" --body "$body"
+            fi
+            printf '## sing-box compatibility\n\n%s' "$problems" >> "$GITHUB_STEP_SUMMARY"
+          else
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "Check is clean again (stable $STABLE_VERSION). Run: $RUN_URL"
+              gh issue close "$number"
+            fi
+            printf '## sing-box compatibility\n\nStable %s and development checks are clean.\n' "$STABLE_VERSION" >> "$GITHUB_STEP_SUMMARY"
           fi

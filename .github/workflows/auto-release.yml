@@ -1,4 +1,4 @@
-name: Auto release after reviewed sync merge
+name: Auto release after reviewed merge
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'Already merged main -> custom synchronization PR number'
+        description: 'Number of an already merged PR into custom (retry or recovery)'
         required: true
         type: string
 
@@ -24,13 +24,14 @@ env:
 
 jobs:
   prepare:
-    # Cheap trigger filter only; the authoritative gate is the eligibility
-    # script using real PR metadata after validation succeeds.
+    # Every PR merged into custom publishes a release: the upstream sync PR
+    # (head `main`) and feature PRs alike. Cheap trigger filter only; the
+    # authoritative gate is the eligibility script using real PR metadata
+    # after validation succeeds. PRs from other repositories never publish.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
        github.event.pull_request.base.ref == 'custom' &&
-       github.event.pull_request.head.ref == 'main' &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
@@ -101,14 +102,25 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_MERGED: ${{ needs.prepare.outputs.merged }}
           PR_BASE: ${{ needs.prepare.outputs.base }}
-          PR_HEAD: ${{ needs.prepare.outputs.head }}
           PR_HEAD_REPO: ${{ needs.prepare.outputs.head_repo }}
           MERGE_SHA: ${{ needs.prepare.outputs.merge_sha }}
         run: |
           set -euo pipefail
           git fetch origin custom
-          test "$(git rev-parse origin/custom)" = "$MERGE_SHA" || {
-            echo 'merge commit is not the reviewed HEAD of custom' >&2; exit 1; }
+          head_sha=$(git rev-parse origin/custom)
+          if [ "$head_sha" != "$MERGE_SHA" ]; then
+            # Several PRs merged in quick succession: only the newest merge
+            # publishes, and its release already contains this one.
+            if git merge-base --is-ancestor "$MERGE_SHA" "$head_sha"; then
+              {
+                echo 'decision=skip'
+                echo "reason=custom has moved on to $head_sha; the release for that later merge includes this PR"
+              } >> "$GITHUB_OUTPUT"
+              printf 'Resolution: skipped, custom moved on to `%s`\n' "$head_sha" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo 'merge commit is not contained in custom' >&2; exit 1
+          fi
           if ! CUSTOM_SHA="$MERGE_SHA" node scripts/release-eligibility.mjs; then
             echo 'PR does not qualify for an automatic release' >&2
             exit 1
