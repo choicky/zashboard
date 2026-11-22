@@ -1,4 +1,4 @@
-name: Validate synchronization result
+name: '2 · PR checks (build, tests, sing-box)'
 
 on:
   pull_request:

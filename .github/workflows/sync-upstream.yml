@@ -1,4 +1,4 @@
-name: Sync upstream
+name: '1 · Daily upstream sync (main mirror + sync PR)'
 
 on:
   schedule:
@@ -104,7 +104,7 @@ jobs:
             printf '### Changed files (upstream side only)\n\n```\n%s\n```\n\n' "$changed"
             printf '### sing-box-sensitive files\n\n```\n%s\n```\n\n' "$sensitive"
             printf '### Validation status\n\n'
-            printf '`Validate synchronization result` runs on this PR merge result as the\n'
+            printf '`2 · PR checks` runs on this PR merge result as the\n'
             printf 'required checks `validate` and `native-browser`. If the runs show\n'
             printf '**Approve workflows to run**, approve them; both must pass before merging.\n\n'
             printf '### Unresolved risks\n\n'

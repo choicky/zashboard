@@ -1,4 +1,4 @@
-name: Auto release after reviewed merge
+name: '3 · Auto release on merge'
 
 on:
   pull_request:

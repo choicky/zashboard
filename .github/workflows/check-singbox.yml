@@ -1,4 +1,4 @@
-name: Check sing-box compatibility
+name: '4 · Weekly sing-box compatibility check'
 
 on:
   schedule:

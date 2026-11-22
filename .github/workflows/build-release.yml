@@ -1,4 +1,4 @@
-name: Fork build and release
+name: '3a · Build and publish (called by 3, do not run directly)'
 
 on:
   # Single implementation of package construction and publication, reachable
