@@ -6,7 +6,13 @@ interface CacheEntry<T> {
   data: T
 }
 
-export const fetchWithLocalCache = async <T>(url: string, version: string): Promise<T> => {
+// maxAge 0 always refetches (and refreshes the cache), e.g. for an explicit or
+// periodic check that must not reuse an older answer.
+export const fetchWithLocalCache = async <T>(
+  url: string,
+  version: string,
+  maxAge = CACHE_DURATION,
+): Promise<T> => {
   const cacheKey = 'cache/' + url
   const cacheRaw = localStorage.getItem(cacheKey)
 
@@ -15,7 +21,7 @@ export const fetchWithLocalCache = async <T>(url: string, version: string): Prom
       const cache: CacheEntry<T> = JSON.parse(cacheRaw)
       const now = Date.now()
 
-      if (now - cache.timestamp < CACHE_DURATION && cache.version === version) {
+      if (now - cache.timestamp < maxAge && cache.version === version) {
         return cache.data
       } else {
         localStorage.removeItem(cacheKey)

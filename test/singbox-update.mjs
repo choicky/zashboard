@@ -5,6 +5,7 @@ import {
   releasesUrlFor,
   SINGBOX_LATEST_RELEASE_URL,
   SINGBOX_RECENT_RELEASES_URL,
+  singboxUpdateStatus,
 } from '../src/assembly/release-version.ts'
 
 const release = (tag, prerelease = /-/.test(tag), draft = false) => ({
@@ -66,4 +67,17 @@ assert.equal(findSingboxUpdate([release('v1.15.0-rc.1', false)], installed('1.14
 assert.equal(findSingboxUpdate([], installed('1.14.4')), undefined)
 assert.equal(findSingboxUpdate([release('not-a-version', false)], installed('1.14.4')), undefined)
 
-console.log('sing-box update notice: version parsing and channel selection passed')
+// Check result: an update, or "latest" with the channel the user is on.
+assert.deepEqual(singboxUpdateStatus(recent, installed('1.15.0-alpha.14')), {
+  state: 'latest',
+  channel: 'testing',
+})
+assert.deepEqual(singboxUpdateStatus([release('v1.14.4')], installed('1.14.4')), {
+  state: 'latest',
+  channel: 'stable',
+})
+const updateStatus = singboxUpdateStatus(recent, installed('1.15.0-alpha.13'))
+assert.equal(updateStatus.state, 'update')
+assert.equal(updateStatus.update.version, '1.15.0-alpha.14')
+
+console.log('sing-box update notice: version parsing, channel selection and status passed')

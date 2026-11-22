@@ -137,3 +137,18 @@ export const findSingboxUpdate = (
     prerelease: newest.version.prerelease.length > 0,
   }
 }
+
+// Result of one core update check. `latest` means the check succeeded and the
+// installed core is current; `channel` is known for sing-box only.
+export type CoreUpdateStatus =
+  { state: 'latest'; channel?: 'stable' | 'testing' } | { state: 'update'; update?: SingboxUpdate }
+
+export const singboxUpdateStatus = (
+  releases: SingboxRelease[],
+  installed: ReleaseVersion,
+): CoreUpdateStatus => {
+  const update = findSingboxUpdate(releases, installed)
+  return update
+    ? { state: 'update', update }
+    : { state: 'latest', channel: isTestingVersion(installed) ? 'testing' : 'stable' }
+}
