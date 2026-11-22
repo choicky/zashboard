@@ -193,6 +193,10 @@ const ru: LANG_MESSAGE = {
   restartCoreConfirm:
     'Перезапустить ядро сейчас? Работа прокси ненадолго прервётся, существующие соединения будут разорваны.',
   checkCoreUpgrade: 'Проверить доступность обновления ядра',
+  coreUpdateAvailable: 'Доступна новая версия: {version}',
+  coreUpdateAvailableTesting: 'Доступна новая тестовая версия: {version}',
+  coreUpdateManualHint: 'Обновите sing-box на устройстве, где он запущен',
+  coreUpdateReleasePage: 'Страница релиза',
   autoUpgradeDashboard: 'Автоматически обновлять панель до новой версии',
   autoUpgradeCore: 'Автоматически обновлять ядро до новой версии',
   secondaryPath: 'Дополнительный путь',

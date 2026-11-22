@@ -38,6 +38,7 @@ export type Cap =
   | 'syncSettings'
   | 'independentLatency'
   | 'coreUpdateCheck'
+  | 'coreUpdateNotice'
   | 'configPatch'
   | 'networkConfig'
   | 'traceLogLevel'
@@ -93,6 +94,8 @@ const clashCaps = computed<Caps>(() => {
     syncSettings: mihomoOrForkCore,
     independentLatency: mihomoOrForkCore,
     coreUpdateCheck: mihomo,
+    // sing-box cannot upgrade itself through either API: notify only.
+    coreUpdateNotice: singBox,
     configPatch: mihomo || singBox,
     networkConfig: mihomo,
 

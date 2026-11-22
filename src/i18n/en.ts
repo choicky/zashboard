@@ -191,6 +191,10 @@ const en = {
   restartCoreConfirm:
     'Restart the core now? The proxy service will be briefly interrupted and existing connections will be dropped.',
   checkCoreUpgrade: 'Check for core upgrades',
+  coreUpdateAvailable: 'New version available: {version}',
+  coreUpdateAvailableTesting: 'New testing version available: {version}',
+  coreUpdateManualHint: 'Upgrade sing-box on the device that runs it',
+  coreUpdateReleasePage: 'Release page',
   autoUpgradeDashboard: 'Auto-upgrade dashboard',
   autoUpgradeCore: 'Auto-upgrade core',
   secondaryPath: 'Secondary path',

@@ -129,8 +129,37 @@
           />
         </SettingItem>
         <SettingItem
+          :setting-key="k.checkCoreUpgrade"
+          anchor-key="singboxUpdateNotice"
+          :when="checkUpgradeCore && !!singboxUpdate"
+          class="settings-dependent-item"
+        >
+          <div class="flex min-w-0 grow flex-col gap-0.5">
+            <div class="setting-item-label">
+              {{
+                $t(
+                  singboxUpdate?.prerelease ? 'coreUpdateAvailableTesting' : 'coreUpdateAvailable',
+                  {
+                    version: singboxUpdate?.version,
+                  },
+                )
+              }}
+            </div>
+            <div class="text-base-content/60 text-xs">{{ $t('coreUpdateManualHint') }}</div>
+          </div>
+          <a
+            class="btn btn-sm btn-neutral"
+            :href="singboxUpdate?.url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ $t('coreUpdateReleasePage') }}
+          </a>
+        </SettingItem>
+        <!-- sing-box cannot upgrade itself through either API. -->
+        <SettingItem
           :setting-key="k.autoUpgradeCore"
-          :when="checkUpgradeCore"
+          :when="checkUpgradeCore && can('coreUpgrade')"
           class="settings-dependent-item"
         >
           <div class="setting-item-label">{{ $t('autoUpgradeCore') }}</div>
@@ -185,7 +214,7 @@
 import { can } from '@/assembly/backend'
 import { daeCapabilities } from '@/assembly/capabilities'
 import { configs, updateConfigs } from '@/assembly/config'
-import { coreBrand, isCoreUpdateAvailable } from '@/assembly/version'
+import { coreBrand, isCoreUpdateAvailable, singboxUpdate } from '@/assembly/version'
 import BackendVersion from '@/components/common/BackendVersion.vue'
 import SelectInput, { type SelectOption } from '@/components/common/SelectInput.vue'
 import BackendPortsGrid from '@/components/settings/backend/BackendPortsGrid.vue'
@@ -253,12 +282,14 @@ const hasVisibleNetworkSettings = computed(
       canShowTunStack.value ||
       isVisibleAllowLan.value),
 )
+// mihomo checks and upgrades itself; sing-box only gets a release notice.
 const hasVisibleUpgradeSettings = computed(
   () =>
-    can('configPatch') &&
-    !!configs.value &&
     !activeBackend.value?.disableUpgradeCore &&
-    (isVisibleCheckUpgrade.value || (checkUpgradeCore.value && isVisibleAutoUpgrade.value)),
+    ((can('configPatch') && !!configs.value && can('coreUpdateCheck')) ||
+      can('coreUpdateNotice')) &&
+    (isVisibleCheckUpgrade.value ||
+      (checkUpgradeCore.value && can('coreUpgrade') && isVisibleAutoUpgrade.value)),
 )
 const hasVisibleItems = computed(
   () =>
@@ -275,6 +306,7 @@ const handlerCheckUpgradeCoreChange = () => {
   if (!checkUpgradeCore.value) {
     autoUpgradeCore.value = false
     isCoreUpdateAvailable.value = false
+    singboxUpdate.value = undefined
   }
 }
 const hanlderTunModeChange = async () => {
