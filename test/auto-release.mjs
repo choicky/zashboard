@@ -254,6 +254,18 @@ try {
       assert.equal(relevance(commitFile(path), tags).relevant, 'true', path)
     }
 
+    // Moving a packaged file into an excluded directory removes it from the
+    // package, so the rename's source path must count.
+    rgit('reset', '-q', '--hard', docsOnly)
+    commitFile('public/ATTRIBUTION.md', 'attribution text that git can track as a rename\n')
+    const movedTags = [{ name: 'sb-v3.30.3', sha: rgit('rev-parse', 'HEAD') }]
+    mkdirSync(join(relRepo, 'docs'), { recursive: true })
+    rgit('mv', 'public/ATTRIBUTION.md', 'docs/ATTRIBUTION.md')
+    rgit('commit', '-q', '-m', 'move attribution to docs')
+    const moved = relevance(rgit('rev-parse', 'HEAD'), movedTags)
+    assert.equal(moved.relevant, 'true', JSON.stringify(moved))
+    assert.equal(moved.files, 'public/ATTRIBUTION.md')
+
     // The newest contained stable tag is the baseline; a tag not contained in
     // the merge is ignored.
     rgit('reset', '-q', '--hard', product)

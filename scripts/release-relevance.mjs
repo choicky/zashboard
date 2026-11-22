@@ -68,7 +68,11 @@ const base = tags
   .reduce((best, tag) => (!best || newer(version(tag.name), version(best.name)) ? tag : best), null)
 if (!base) report(true, 'no earlier stable release is contained in this merge')
 
-const changed = git('diff', '--name-only', base.sha, sha).split('\n').filter(Boolean)
+// --no-renames: a rename reports both its source and destination, so moving a
+// packaged file into an excluded directory still counts as a product change.
+const changed = git('diff', '--name-only', '--no-renames', base.sha, sha)
+  .split('\n')
+  .filter(Boolean)
 const product = changed.filter((path) => !isNonProduct(path))
 if (product.length) {
   report(true, `product files changed since ${base.name}`, product.slice(0, 20))
