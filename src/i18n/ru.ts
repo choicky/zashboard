@@ -124,6 +124,7 @@ const ru: LANG_MESSAGE = {
   noExpire: 'Нет',
   updated: 'Обновлено',
   upgradeDashboard: 'Обновить панель до новой версии',
+  dashboardSourceHint: 'Перед обновлением укажите в sing-box адрес external_ui_download_url',
   reloadConfigs: 'Перезагрузить конфигурации',
   updateConfigs: 'Обновить конфигурации',
   updateConfigsSuccess: 'Конфигурации успешно обновлены',

@@ -224,7 +224,7 @@ const checkUIUpdateForGeneration = async (checkGeneration: number) => {
 
   isUIUpdateAvailable.value = hasNewerStableRelease(releases, zashboardReleaseTag.value)
 
-  if (isUIUpdateAvailable.value && autoUpgradeDashboard.value) {
+  if (isUIUpdateAvailable.value && autoUpgradeDashboard.value && can('dashboardAutoUpgrade')) {
     upgradeUI().catch(() => {})
   }
 }

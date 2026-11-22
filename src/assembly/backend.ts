@@ -30,6 +30,8 @@ export type Cap =
   | 'coreUpgrade'
   | 'coreRestart'
   | 'dashboardUpgrade'
+  | 'dashboardConfiguredSource'
+  | 'dashboardAutoUpgrade'
   | 'reloadConfigs'
   | 'updateConfigs'
   | 'updateGeoDatabase'
@@ -75,13 +77,16 @@ const clashCaps = computed<Caps>(() => {
   const mihomo = core.value === Core.Mihomo
   const singBox = core.value === Core.SingBox
   const channelCaps = channelSpecificCapabilities(activeBackend.value?.type)
+  const singBoxClash = singBox && activeBackend.value?.type === 'clash'
   const honk = core.value === Core.Honk
   const mihomoOrForkCore = mihomo || isForkCoreOverride.value
 
   return {
     coreUpgrade: mihomoOrForkCore,
     coreRestart: mihomoOrForkCore,
-    dashboardUpgrade: mihomoOrForkCore,
+    dashboardUpgrade: mihomoOrForkCore || singBoxClash,
+    dashboardConfiguredSource: singBoxClash,
+    dashboardAutoUpgrade: mihomoOrForkCore,
     reloadConfigs: mihomoOrForkCore,
     updateConfigs: mihomoOrForkCore,
     updateGeoDatabase: mihomoOrForkCore,

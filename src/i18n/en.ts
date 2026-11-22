@@ -122,6 +122,7 @@ const en = {
   noExpire: 'No expiry',
   updated: 'Updated',
   upgradeDashboard: 'Upgrade dashboard',
+  dashboardSourceHint: 'Before updating, set external_ui_download_url in sing-box to',
   reloadConfigs: 'Reload configs',
   updateConfigs: 'Update configs',
   updateConfigsSuccess: 'Configs updated successfully',

@@ -56,7 +56,7 @@ configuration; do not use an upstream or `ghcr.io/choicky/zashboard` image.
 2. Right-clicking on a node / node group card will perform a speedtest for the node / node group.
 3. The proxy group sorting is based on the node order in the GLOBAL group, which follows the configuration file order. If you need custom ordering, you can specify the order by overriding the GLOBAL group.
 4. The dashboard supports PWA (Progressive Web App), which can provide a native app-like experience on mobile devices through "Add to Home Screen".
-5. Dashboard upgrade is enabled only for verified Mihomo-compatible core paths. It is disabled for sing-box until the complete real-core update and rollback path is verified; use the fixed-tag manual update procedure in the compatibility guide.
+5. For manual dashboard updates through the sing-box Clash API, configure the fork download URL in the [compatibility guide](docs/sing-box-compatibility.md).
 
 ## 提示
 
@@ -64,7 +64,7 @@ configuration; do not use an upstream or `ghcr.io/choicky/zashboard` image.
 2. 右键点击节点/节点组卡片可对节点/节点组进行测速。
 3. 面板的节点组排序是根据GLOBAL组中的节点顺序排序的，即按配置文件的顺序，如果你需要自定义顺序，可通过覆盖GLOBAL组指定顺序
 4. 面板支持PWA（Progressive Web App），可以在移动设备上通过"添加到主屏幕"获得类原生app的体验
-5. 面板升级仅对已验证的 Mihomo 兼容核心路径开启。sing-box 的完整真实核心升级及回滚路径尚未验证，因此暂时关闭，请按兼容性指南使用固定标签手动更新。
+5. 使用 sing-box Clash API 时，可按[兼容性指南](docs/sing-box-compatibility.md)配置本项目下载地址，随后在面板中手动更新。
 
 ## URL params format
 

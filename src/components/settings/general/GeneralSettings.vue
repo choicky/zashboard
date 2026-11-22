@@ -7,8 +7,20 @@
         :setting-key="k.actions"
         :anchor-key="`${k.actions}.upgradeDashboard`"
       >
-        <div class="setting-item-label">{{ $t('upgradeDashboard') }}</div>
+        <div class="min-w-0">
+          <div class="setting-item-label">{{ $t('upgradeDashboard') }}</div>
+          <div
+            v-if="can('dashboardConfiguredSource')"
+            class="text-xs break-all"
+          >
+            {{ $t('dashboardSourceHint') }}
+            <code
+              >https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-full.zip</code
+            >
+          </div>
+        </div>
         <button
+          :aria-label="$t('upgradeDashboard')"
           :class="twMerge('btn btn-sm', isUIUpgrading ? 'animate-pulse' : '')"
           @click="handlerClickUpgradeUI"
         >
@@ -21,7 +33,7 @@
       </SettingItem>
       <LanguageSelect />
       <SettingItem
-        v-if="showDashboardUpgrade"
+        v-if="can('dashboardAutoUpgrade')"
         :setting-key="k.autoUpgradeDashboard"
       >
         <div class="setting-item-label">{{ $t('autoUpgradeDashboard') }}</div>
@@ -251,7 +263,7 @@ const hasVisibleApplicationItems = computed(
   () =>
     isVisibleActions.value ||
     isVisibleLanguage.value ||
-    (showDashboardUpgrade.value && isVisibleAutoUpgrade.value),
+    (can('dashboardAutoUpgrade') && isVisibleAutoUpgrade.value),
 )
 const hasVisibleNetworkItems = computed(
   () =>

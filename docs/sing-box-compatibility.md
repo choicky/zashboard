@@ -71,7 +71,10 @@ Clash API 用户继续使用 `experimental.clash_api.external_controller`、
 `external_ui`、`external_ui_download_url` 和 `secret`；它与上述 native
 service 是两种独立连接记录。首次下载时 UI 目录为空，sing-box 下载固定
 Release ZIP 并解压；手动更新时下载并校验 `SHA256SUMS`，准备新目录后替换，
-失败则保留旧目录。面板内升级对 sing-box 保持禁用。
+失败则保留旧目录。使用 Clash API 时，也可在“设置 → 通用 → 升级面板”手动更新。
+先将生效配置中的 `external_ui_download_url` 设为
+`https://github.com/choicky/zashboard/releases/latest/download/zashboard-singbox-full.zip`。
+按钮调用核心的 `POST /upgrade/ui`，实际下载源由核心配置决定。此方式不提供失败回滚。
 
 ## 平台
 
