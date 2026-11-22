@@ -32,13 +32,20 @@ in this fork.
 ## Merge and release boundaries
 
 Every PR merged into `custom` from this repository publishes a release: the
-`main → custom` sync PR and feature PRs alike. Before merge, `validate` and
+`main → custom` sync PR and feature PRs alike, unless nothing the release ships
+changed. Before merge, `validate` and
 `native-browser` are required checks on `custom`; after merge, validation of
 the exact merge commit must succeed again before tagging.
 
 - The merge commit must be the current HEAD of `custom`. If several PRs merge in
   quick succession, an older merge already contained in `custom` is skipped
   successfully; the newest merge publishes and includes it.
+- Skip when, since the newest stable tag contained in the merge, only
+  non-product paths changed: `docs/`, `.github/`, `test/`, `scripts/`,
+  `readme/`, `.husky/` and root metadata (Markdown, licence, lint/format
+  configs, Docker files). The list lives in `scripts/release-relevance.mjs`;
+  anything not on it counts as a product change. Skipped changes ship with the
+  next product release.
 - PRs from other repositories and direct pushes never publish.
 - Publication is reachable only from auto-release: no tag-push or manual entry
   in the build workflow. Manual dispatch of auto-release retries an

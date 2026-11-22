@@ -24,8 +24,8 @@ env:
 
 jobs:
   prepare:
-    # Every PR merged into custom publishes a release: the upstream sync PR
-    # (head `main`) and feature PRs alike. Cheap trigger filter only; the
+    # Every PR merged into custom publishes a release (the upstream sync PR
+    # and feature PRs alike) unless it changes nothing the release ships. Cheap trigger filter only; the
     # authoritative gate is the eligibility script using real PR metadata
     # after validation succeeds. PRs from other repositories never publish.
     if: >-
@@ -129,6 +129,17 @@ jobs:
           base_version=$(git show "$MERGE_SHA:package.json" | jq -r .version)
           git fetch origin --tags --prune
           tags=$(node scripts/release-state.mjs --repo .)
+
+          # Policy C: skip when only docs, CI, tests or metadata changed since
+          # the newest stable release contained in this merge.
+          relevance=$(node scripts/release-relevance.mjs --repo . --sha "$MERGE_SHA" --tags "$tags")
+          printf '%s\n' "$relevance"
+          if [ "$(printf '%s\n' "$relevance" | sed -n 's/^relevant=//p')" != true ]; then
+            reason=$(printf '%s\n' "$relevance" | sed -n 's/^reason=//p')
+            { echo 'decision=skip'; echo "reason=$reason"; } >> "$GITHUB_OUTPUT"
+            printf 'Resolution: skipped, %s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
           jq -n \
             --argjson tags "$tags" \
