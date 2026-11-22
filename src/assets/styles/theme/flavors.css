@@ -1,0 +1,87 @@
+/*
+ * Shape, elevation and sidebar of the FlClash-style and sparkle-style themes.
+ * Colors live in presets.css. Cards are `rounded-xl`, page panels
+ * `rounded-2xl`; both read the radius variables below.
+ */
+
+/* FlClash: iOS-like grouped cards without borders or shadows, and a sidebar
+ * one step darker than the page (prism_ui chromeSurface). The selected entry
+ * keeps a soft onSurface fill; its icon carries the accent. */
+[data-theme='flclash-light'],
+[data-theme='flclash-dark'] {
+  --radius-field: 0.75rem;
+  --radius-selector: 1rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+}
+
+[data-theme='flclash-light'] {
+  --app-sidebar-surface: #e4e2e4;
+}
+
+[data-theme='flclash-dark'] {
+  --app-sidebar-surface: #1b1b1e;
+}
+
+html[data-theme^='flclash-'] .sidebar {
+  background-color: var(--app-sidebar-surface);
+}
+
+html[data-theme^='flclash-'] .sidebar .nav-indicator {
+  background-color: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+  box-shadow: none;
+}
+
+html[data-theme^='flclash-'] .sidebar .nav-item[aria-current='page'] .nav-item-icon {
+  color: var(--color-primary);
+}
+
+/* sparkle: white (or zinc) cards floating on soft HeroUI shadows, 14px
+ * corners, and a selected sidebar entry filled with the accent. */
+[data-theme='sparkle-light'],
+[data-theme='sparkle-dark'] {
+  --radius-field: 0.5rem;
+  --radius-selector: 1rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 0.875rem;
+}
+
+[data-theme='sparkle-light'] {
+  --app-card-shadow:
+    0 0 15px 0 rgb(0 0 0 / 0.03), 0 2px 30px 0 rgb(0 0 0 / 0.08), 0 0 1px 0 rgb(0 0 0 / 0.3);
+}
+
+[data-theme='sparkle-dark'] {
+  --app-card-shadow:
+    0 0 15px 0 rgb(0 0 0 / 0.06), 0 2px 30px 0 rgb(0 0 0 / 0.22),
+    inset 0 0 1px 0 rgb(255 255 255 / 0.15);
+}
+
+html[data-theme^='sparkle-'] :is(.settings-grid, .base-container) {
+  box-shadow: var(--app-card-shadow);
+}
+
+html[data-theme^='sparkle-'] .sidebar {
+  background-color: var(--color-base-100);
+}
+
+html[data-theme^='sparkle-'] .sidebar .nav-indicator {
+  background-color: var(--color-primary);
+  box-shadow: none;
+}
+
+html[data-theme^='sparkle-'] .sidebar .nav-item[aria-current='page'],
+html[data-theme^='sparkle-']
+  .sidebar
+  .nav-item[aria-current='page']
+  :is(.nav-item-icon, .nav-item-count) {
+  color: var(--color-primary-content);
+}
+
+/* Both apps show an "on" switch as an accent-filled track with a white knob. */
+html:is([data-theme^='flclash-'], [data-theme^='sparkle-'])
+  :is(.toggle:checked, .toggle:has(> input:checked)) {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  --input-color: var(--color-primary-content);
+}

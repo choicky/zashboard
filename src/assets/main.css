@@ -11,5 +11,7 @@
 @import './styles/components/app.css';
 @import './styles/components/tooltip.css';
 
+@import './styles/theme/flavors.css';
+
 @import './styles/utilities/appearance.css';
 @import './styles/utilities/motion.css';
