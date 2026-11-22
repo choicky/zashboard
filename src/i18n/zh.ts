@@ -124,6 +124,7 @@ const zh: LANG_MESSAGE = {
   noExpire: '不限时',
   updated: '更新于',
   upgradeDashboard: '升级面板',
+  dashboardSourceHint: '更新前请确认 sing-box 配置中的 external_ui_download_url 指向',
   reloadConfigs: '重载配置',
   updateConfigs: '更新配置',
   updateConfigsSuccess: '配置更新成功',
