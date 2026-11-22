@@ -194,6 +194,7 @@ const zh: LANG_MESSAGE = {
   coreUpdateAvailableTesting: '有新测试版：{version}',
   coreUpdateManualHint: '请在运行 sing-box 的设备上升级',
   coreUpdateReleasePage: '发布页',
+  coreUpdateCheckFailed: '检查更新失败：{reason}',
   coreUpToDate: '当前已是最新版本，无需更新',
   coreUpToDateStable: '当前使用的是最新的稳定版，无需更新',
   coreUpToDateTesting: '当前使用的是最新的测试版，无需更新',

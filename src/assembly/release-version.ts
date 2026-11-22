@@ -141,7 +141,18 @@ export const findSingboxUpdate = (
 // Result of one core update check. `latest` means the check succeeded and the
 // installed core is current; `channel` is known for sing-box only.
 export type CoreUpdateStatus =
-  { state: 'latest'; channel?: 'stable' | 'testing' } | { state: 'update'; update?: SingboxUpdate }
+  | { state: 'latest'; channel?: 'stable' | 'testing' }
+  | { state: 'update'; update?: SingboxUpdate }
+  | { state: 'failed'; reason: string }
+
+// Keep only the fields the sing-box check reads; accepts a list or one release.
+export const pickSingboxReleases = (raw: unknown): SingboxRelease[] =>
+  (Array.isArray(raw) ? raw : [raw]).map((release: SingboxRelease) => ({
+    tag_name: release.tag_name,
+    prerelease: release.prerelease,
+    draft: release.draft,
+    html_url: release.html_url,
+  }))
 
 export const singboxUpdateStatus = (
   releases: SingboxRelease[],

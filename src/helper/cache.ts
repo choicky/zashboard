@@ -7,11 +7,14 @@ interface CacheEntry<T> {
 }
 
 // maxAge 0 always refetches (and refreshes the cache), e.g. for an explicit or
-// periodic check that must not reuse an older answer.
+// periodic check that must not reuse an older answer. `select` keeps only what
+// the caller needs: GitHub release lists are several MB with every asset's
+// metadata, which can exceed the localStorage quota.
 export const fetchWithLocalCache = async <T>(
   url: string,
   version: string,
   maxAge = CACHE_DURATION,
+  select: (raw: unknown) => T = (raw) => raw as T,
 ): Promise<T> => {
   const cacheKey = 'cache/' + url
   const cacheRaw = localStorage.getItem(cacheKey)
@@ -22,7 +25,9 @@ export const fetchWithLocalCache = async <T>(
       const now = Date.now()
 
       if (now - cache.timestamp < maxAge && cache.version === version) {
-        return cache.data
+        // Entries written by older builds may hold the raw response; `select`
+        // is idempotent, so applying it again also normalises them.
+        return select(cache.data)
       } else {
         localStorage.removeItem(cacheKey)
       }
@@ -36,12 +41,18 @@ export const fetchWithLocalCache = async <T>(
     throw new Error(`Fetch failed: ${response.status} ${response.statusText}`)
   }
 
-  const data: T = await response.json()
+  const data = select(await response.json())
 
-  localStorage.setItem(
-    cacheKey,
-    JSON.stringify({ timestamp: Date.now(), version, data } satisfies CacheEntry<T>),
-  )
+  // The cache is an optimisation: a full or unavailable storage must never
+  // turn a successful fetch into a failure.
+  try {
+    localStorage.setItem(
+      cacheKey,
+      JSON.stringify({ timestamp: Date.now(), version, data } satisfies CacheEntry<T>),
+    )
+  } catch (e) {
+    console.warn('Failed to cache', url, e)
+  }
 
   return data
 }

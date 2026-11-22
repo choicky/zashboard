@@ -197,6 +197,7 @@ const ru: LANG_MESSAGE = {
   coreUpdateAvailableTesting: 'Доступна новая тестовая версия: {version}',
   coreUpdateManualHint: 'Обновите sing-box на устройстве, где он запущен',
   coreUpdateReleasePage: 'Страница релиза',
+  coreUpdateCheckFailed: 'Не удалось проверить обновления: {reason}',
   coreUpToDate: 'Установлена последняя версия, обновление не требуется',
   coreUpToDateStable: 'Установлена последняя стабильная версия, обновление не требуется',
   coreUpToDateTesting: 'Установлена последняя тестовая версия, обновление не требуется',
