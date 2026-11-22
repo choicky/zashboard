@@ -209,3 +209,148 @@
   --depth: 1;
   --noise: 0;
 }
+
+/*
+ * FlClash-style themes. Colors reproduce FlClash's default appearance
+ * (prism_ui "vivid" style, seed #007AFF): Material content scheme with
+ * prism_ui's surface chroma caps and dark tone overrides. Page = Material
+ * surfaceContainer (light) / surface (dark); cards = surfaceBright (light) /
+ * surfaceContainer at tone 15 (dark). Shape and sidebar: tokens.css.
+ */
+@plugin 'daisyui/theme' {
+  name: 'flclash-light';
+  color-scheme: light;
+  --color-primary: #007aff;
+  --color-primary-content: #ffffff;
+  --color-secondary: #405e96;
+  --color-secondary-content: #ffffff;
+  --color-accent: #8e2cb1;
+  --color-accent-content: #ffffff;
+  --color-neutral: #2d3039;
+  --color-neutral-content: #eef0fc;
+  --color-base-100: #fcf8f9;
+  --color-base-200: #efedf0;
+  --color-base-300: #e4e2e4;
+  --color-base-content: #181c23;
+  --color-info: #007aff;
+  --color-info-content: #ffffff;
+  --color-success: #006e1c;
+  --color-success-content: #ffffff;
+  --color-warning: #8b5000;
+  --color-warning-content: #ffffff;
+  --color-error: #ba1a1a;
+  --color-error-content: #ffffff;
+  --radius-selector: 1rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin 'daisyui/theme' {
+  name: 'flclash-dark';
+  --color-primary: #2f83ff;
+  --color-primary-content: #ffffff;
+  --color-secondary: #adc6ff;
+  --color-secondary-content: #082f65;
+  --color-accent: #eeb1ff;
+  --color-accent-content: #53006f;
+  --color-neutral: #e0e2ed;
+  --color-neutral-content: #2d3039;
+  --color-base-100: #252628;
+  --color-base-200: #131315;
+  --color-base-300: #404042;
+  --color-base-content: #f5f6ff;
+  --color-info: #2f83ff;
+  --color-info-content: #ffffff;
+  --color-success: #78dc77;
+  --color-success-content: #00390a;
+  --color-warning: #ffb870;
+  --color-warning-content: #4a2800;
+  --color-error: #ffb4ab;
+  --color-error-content: #690005;
+  --radius-selector: 1rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+  color-scheme: dark;
+}
+
+/*
+ * sparkle-style themes. Colors are sparkle's HeroUI tokens: white (light) or
+ * black (dark) page, white / zinc-900 cards lifted by soft shadows, accent
+ * #006FEE. The page uses HeroUI default-50 instead of pure white so inset
+ * tiles stay visible. Shape, shadows and sidebar: tokens.css.
+ */
+@plugin 'daisyui/theme' {
+  name: 'sparkle-light';
+  color-scheme: light;
+  --color-primary: #006fee;
+  --color-primary-content: #ffffff;
+  --color-secondary: #7828c8;
+  --color-secondary-content: #ffffff;
+  --color-accent: #7828c8;
+  --color-accent-content: #ffffff;
+  --color-neutral: #27272a;
+  --color-neutral-content: #fafafa;
+  --color-base-100: #ffffff;
+  --color-base-200: #fafafa;
+  --color-base-300: #e4e4e7;
+  --color-base-content: #11181c;
+  --color-info: #006fee;
+  --color-info-content: #ffffff;
+  --color-success: #17c964;
+  --color-success-content: #000000;
+  --color-warning: #f5a524;
+  --color-warning-content: #000000;
+  --color-error: #f31260;
+  --color-error-content: #ffffff;
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.875rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin 'daisyui/theme' {
+  name: 'sparkle-dark';
+  --color-primary: #006fee;
+  --color-primary-content: #ffffff;
+  --color-secondary: #9353d3;
+  --color-secondary-content: #ffffff;
+  --color-accent: #9353d3;
+  --color-accent-content: #ffffff;
+  --color-neutral: #e4e4e7;
+  --color-neutral-content: #18181b;
+  --color-base-100: #18181b;
+  --color-base-200: #000000;
+  --color-base-300: #3f3f46;
+  --color-base-content: #ecedee;
+  --color-info: #006fee;
+  --color-info-content: #ffffff;
+  --color-success: #17c964;
+  --color-success-content: #000000;
+  --color-warning: #f5a524;
+  --color-warning-content: #000000;
+  --color-error: #f31260;
+  --color-error-content: #ffffff;
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.875rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+  color-scheme: dark;
+}
