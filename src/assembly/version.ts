@@ -28,7 +28,9 @@ export const isCoreUpdateAvailable = ref(false)
 // Newer official sing-box release; the user upgrades on the host.
 export const singboxUpdate = ref<SingboxUpdate | undefined>()
 export const isUIUpdateAvailable = ref(false)
-export const zashboardVersion = ref(__APP_VERSION__)
+// The fork release tag (e.g. sb-v3.30.4) is the dashboard's identity: it is
+// shown in settings and compared with newer fork releases. package.json keeps
+// the upstream version and is not a fork release number.
 export const zashboardReleaseTag = ref(__BUILD_RELEASE_TAG__)
 let backendGeneration = 0
 let uiUpdateCheckGeneration = -1
