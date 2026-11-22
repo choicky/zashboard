@@ -25,7 +25,9 @@ export const fetchWithLocalCache = async <T>(
       const now = Date.now()
 
       if (now - cache.timestamp < maxAge && cache.version === version) {
-        return cache.data
+        // Entries written by older builds may hold the raw response; `select`
+        // is idempotent, so applying it again also normalises them.
+        return select(cache.data)
       } else {
         localStorage.removeItem(cacheKey)
       }
